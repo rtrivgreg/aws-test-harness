@@ -24,9 +24,11 @@ class ConfigRuleManager:
         self.client = boto3.client("config", region_name=self.region)
 
     def _rule_name_for_run(self, base_name: str) -> str:
-        """Make the Config rule name unique per test run (Config rule names are global per account/region)."""
-        # Config rule names max 128 chars; keep it readable
-        safe = base_name.replace("_", "-")[:80]
+        """Make the Config rule name unique per test run and valid for AWS Config."""
+        # Config rule names: only [a-zA-Z0-9_-], max 128 chars
+        import re
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "-", base_name)
+        safe = re.sub(r"-+", "-", safe).strip("-")[:80]
         return f"harness-{safe}-{self.test_run_id}"
 
     @dry_run_guard("PutConfigRule")
