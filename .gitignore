@@ -8,11 +8,16 @@ __pycache__/
 dist/
 build/
 
-# Terraform
-terraform/.terraform/
-terraform/*.tfstate*
-terraform/.terraform.lock.hcl
-terraform/crash.log
+# Terraform (under terraform/ and accidental root runs)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform.lock.hcl
+**/crash.log
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
 
 # Local config
 config/settings.yaml
