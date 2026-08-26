@@ -119,7 +119,7 @@ def s3_test_bucket(
         resource_id=bucket_name,
         resource_type="AWS::S3::Bucket",
         timeout_seconds=300,
-        poll_seconds=15,
+        poll_seconds=5,
     )
 
     yield bucket_name
