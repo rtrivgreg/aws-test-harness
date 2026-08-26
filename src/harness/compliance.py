@@ -1,20 +1,17 @@
 """
 Compliance result helpers.
 
-Important: DescribeConfigRuleEvaluationStatus only tells you that an
-evaluation *ran*.  The actual COMPLIANT / NON_COMPLIANT / NOT_APPLICABLE
-outcome lives in GetComplianceDetailsByConfigRule (or ByResource).
-
-Newly created resources and post-change state both lag in Config. We:
-1. Wait for Config to discover the resource before any rule work.
-2. After each resource mutation, wait for a newer configuration item.
-3. Poll evaluation results until the target resource ID appears.
+Config lag handling:
+1. Wait for resource discovery before any rule work.
+2. After mutation, wait until the CI reflects the intended state (not just a newer timestamp).
+3. Poll evaluation results until the target resource appears.
 """
 
 from __future__ import annotations
 
+import json
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -34,7 +31,6 @@ class ComplianceChecker:
         timeout_seconds: int = 300,
         poll_seconds: int = 5,
     ) -> None:
-        """Block until Config has at least one configuration item for the resource."""
         if is_dry_run():
             log(f"Dry-run – skipping Config discovery wait for {resource_id}")
             return
@@ -79,19 +75,60 @@ class ComplianceChecker:
             f"{resource_type} {resource_id}. Check the configuration recorder."
         )
 
+    def _latest_ci(
+        self, resource_id: str, resource_type: str
+    ) -> Optional[dict]:
+        try:
+            resp = self.client.get_resource_config_history(
+                resourceType=resource_type,
+                resourceId=resource_id,
+                limit=1,
+            )
+            items = resp.get("configurationItems") or []
+            return items[0] if items else None
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in (
+                "ResourceNotDiscoveredException",
+                "NoAvailableConfigurationRecorderException",
+            ):
+                return None
+            raise RuntimeError(
+                f"get_resource_config_history failed for {resource_id}: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _s3_versioning_status(ci: dict) -> Optional[str]:
+        """Extract versioning status from an S3 configuration item if present."""
+        supp = ci.get("supplementaryConfiguration") or {}
+        raw = supp.get("BucketVersioningConfiguration") or supp.get(
+            "VersioningConfiguration"
+        )
+        if not raw:
+            return None
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                return None
+        if isinstance(raw, dict):
+            return raw.get("status") or raw.get("Status")
+        return None
+
     def wait_for_config_item_after(
         self,
         resource_id: str,
         after_timestamp: float,
         resource_type: str = "AWS::S3::Bucket",
-        timeout_seconds: int = 180,
+        timeout_seconds: int = 300,
         poll_seconds: int = 5,
+        expected_versioning: Optional[str] = None,
     ) -> None:
         """
-        Wait until Config has a configuration item with capture time >= after_timestamp.
+        Wait until Config has a CI newer than after_timestamp.
 
-        Call this after mutating the resource (e.g. toggling versioning) so the
-        next evaluation uses the new state instead of a stale CI.
+        If expected_versioning is set ("Enabled" or "Suspended"), also require
+        that the CI's BucketVersioningConfiguration matches.
         """
         if is_dry_run():
             log(f"Dry-run – skipping CI freshness wait for {resource_id}")
@@ -101,47 +138,46 @@ class ComplianceChecker:
         attempt = 0
         while time.time() < deadline:
             attempt += 1
-            try:
-                resp = self.client.get_resource_config_history(
-                    resourceType=resource_type,
-                    resourceId=resource_id,
-                    limit=1,
+            ci = self._latest_ci(resource_id, resource_type)
+            if ci:
+                captured = ci.get("configurationItemCaptureTime")
+                captured_epoch = 0.0
+                if captured is not None:
+                    captured_epoch = (
+                        captured.timestamp()
+                        if hasattr(captured, "timestamp")
+                        else float(captured)
+                    )
+                ver = self._s3_versioning_status(ci)
+                fresh = captured_epoch >= after_timestamp
+                ver_ok = expected_versioning is None or (
+                    ver is not None and ver.lower() == expected_versioning.lower()
                 )
-                items = resp.get("configurationItems") or []
-                if items:
-                    captured = items[0].get("configurationItemCaptureTime")
-                    if captured is not None:
-                        captured_epoch = (
-                            captured.timestamp()
-                            if hasattr(captured, "timestamp")
-                            else float(captured)
-                        )
-                        if captured_epoch >= after_timestamp:
-                            log(
-                                f"Config CI for {resource_id} is fresh "
-                                f"(captured={captured}, attempt={attempt})"
-                            )
-                            return
-                        log(
-                            f"Config CI for {resource_id} still stale "
-                            f"(captured={captured}, need >= {after_timestamp:.0f}, "
-                            f"attempt={attempt})"
-                        )
-            except ClientError as exc:
-                code = exc.response.get("Error", {}).get("Code", "")
-                if code not in (
-                    "ResourceNotDiscoveredException",
-                    "NoAvailableConfigurationRecorderException",
-                ):
-                    raise RuntimeError(
-                        f"get_resource_config_history failed for {resource_id}: {exc}"
-                    ) from exc
+
+                if fresh and ver_ok:
+                    log(
+                        f"Config CI for {resource_id} is ready "
+                        f"(captured={captured}, versioning={ver}, attempt={attempt})"
+                    )
+                    return
+
+                log(
+                    f"Config CI for {resource_id} not ready yet "
+                    f"(captured={captured}, versioning={ver}, "
+                    f"need_ts>={after_timestamp:.0f}, need_ver={expected_versioning}, "
+                    f"attempt={attempt})"
+                )
+            else:
+                log(
+                    f"No Config CI yet for {resource_id} (attempt={attempt})"
+                )
 
             time.sleep(poll_seconds)
 
         raise TimeoutError(
-            f"Timed out after {timeout_seconds}s waiting for a fresh Config CI "
-            f"for {resource_type} {resource_id} after {after_timestamp:.0f}"
+            f"Timed out after {timeout_seconds}s waiting for Config CI for "
+            f"{resource_type} {resource_id} (need after {after_timestamp:.0f}, "
+            f"versioning={expected_versioning})"
         )
 
     def get_results_for_rule(

@@ -68,13 +68,14 @@ def test_s3_rule_compliance_cycle(
 
             rule_name = config_mgr.put_managed_rule(spec)
 
-            # NON_COMPLIANT path
+            # NON_COMPLIANT path – versioning Suspended
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=False)
             change_ts = time.time()
             compliance.wait_for_config_item_after(
                 resource_id=s3_test_bucket,
                 after_timestamp=change_ts,
                 resource_type="AWS::S3::Bucket",
+                expected_versioning="Suspended",
             )
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
@@ -86,13 +87,14 @@ def test_s3_rule_compliance_cycle(
                 config_mgr=config_mgr,
             )
 
-            # COMPLIANT path
+            # COMPLIANT path – versioning Enabled
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=True)
             change_ts = time.time()
             compliance.wait_for_config_item_after(
                 resource_id=s3_test_bucket,
                 after_timestamp=change_ts,
                 resource_type="AWS::S3::Bucket",
+                expected_versioning="Enabled",
             )
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
