@@ -25,12 +25,6 @@ class S3Toggle:
         self.s3 = boto3.client("s3", region_name=self.region)
 
     def _nudge_config_recording(self, reason: str) -> None:
-        """
-        Tag update that gives Config a change it tends to record quickly.
-        Does not affect compliance of the versioning/encryption rules under test.
-        """
-        if True:  # always attempt; dry_run_guard on callers still blocks AWS when dry-run
-            pass
         try:
             log(f"Nudging Config via tag update on {self.bucket_name} ({reason})")
             self.s3.put_bucket_tagging(
@@ -47,6 +41,9 @@ class S3Toggle:
         except ClientError as exc:
             log(f"Tag nudge failed (ignored): {exc}", style="yellow")
 
+    # ------------------------------------------------------------------
+    # Versioning
+    # ------------------------------------------------------------------
     @dry_run_guard("Enable S3 versioning")
     def make_versioning_compliant(self) -> None:
         log(f"Enabling versioning on {self.bucket_name}")
@@ -65,6 +62,55 @@ class S3Toggle:
         )
         self._nudge_config_recording("versioning-suspended")
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+    @dry_run_guard("Put S3 lifecycle configuration")
+    def make_lifecycle_compliant(self) -> None:
+        """At least one Enabled lifecycle rule (sufficient when Config params are empty)."""
+        log(f"Putting enabled lifecycle rule on {self.bucket_name}")
+        self.s3.put_bucket_lifecycle_configuration(
+            Bucket=self.bucket_name,
+            LifecycleConfiguration={
+                "Rules": [
+                    {
+                        "ID": "harness-lifecycle",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": ""},
+                        "Expiration": {"Days": 365},
+                    }
+                ]
+            },
+        )
+        self._nudge_config_recording("lifecycle-enabled")
+
+    @dry_run_guard("Delete S3 lifecycle configuration")
+    def make_lifecycle_noncompliant(self) -> None:
+        log(f"Deleting lifecycle configuration on {self.bucket_name}")
+        try:
+            self.s3.delete_bucket_lifecycle(Bucket=self.bucket_name)
+        except ClientError as exc:
+            if "NoSuchLifecycleConfiguration" in str(exc):
+                log("Lifecycle configuration already absent")
+            else:
+                raise
+        self._nudge_config_recording("lifecycle-removed")
+
+    @dry_run_guard("Versioning on + lifecycle on")
+    def make_version_lifecycle_compliant(self) -> None:
+        """S3_VERSION_LIFECYCLE_POLICY_CHECK: versioned bucket with lifecycle."""
+        self.make_versioning_compliant()
+        self.make_lifecycle_compliant()
+
+    @dry_run_guard("Versioning on + lifecycle off")
+    def make_version_lifecycle_noncompliant(self) -> None:
+        """Versioned bucket without lifecycle → NON_COMPLIANT for version-lifecycle rule."""
+        self.make_versioning_compliant()
+        self.make_lifecycle_noncompliant()
+
+    # ------------------------------------------------------------------
+    # Public access block
+    # ------------------------------------------------------------------
     @dry_run_guard("Lock down S3 public access block")
     def make_public_access_compliant(self) -> None:
         log(f"Enabling full public access block on {self.bucket_name}")
@@ -93,6 +139,9 @@ class S3Toggle:
         )
         self._nudge_config_recording("public-access-relaxed")
 
+    # ------------------------------------------------------------------
+    # Server-side encryption
+    # ------------------------------------------------------------------
     @dry_run_guard("Enable S3 SSE-S3")
     def make_encryption_compliant(self) -> None:
         log(f"Enabling AES256 encryption on {self.bucket_name}")
@@ -128,6 +177,16 @@ class S3Toggle:
                 self.make_versioning_compliant
                 if compliant
                 else self.make_versioning_noncompliant
+            ),
+            "s3_lifecycle": (
+                self.make_lifecycle_compliant
+                if compliant
+                else self.make_lifecycle_noncompliant
+            ),
+            "s3_version_lifecycle": (
+                self.make_version_lifecycle_compliant
+                if compliant
+                else self.make_version_lifecycle_noncompliant
             ),
             "s3_public_access": (
                 self.make_public_access_compliant

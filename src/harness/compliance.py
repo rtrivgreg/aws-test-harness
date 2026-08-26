@@ -115,6 +115,31 @@ class ComplianceChecker:
             return raw.get("status") or raw.get("Status")
         return None
 
+    @staticmethod
+    def _s3_has_lifecycle(ci: dict) -> Optional[bool]:
+        """True if CI shows at least one lifecycle rule; False if explicitly empty; None if unknown."""
+        supp = ci.get("supplementaryConfiguration") or {}
+        raw = (
+            supp.get("BucketLifecycleConfiguration")
+            or supp.get("LifecycleConfiguration")
+            or supp.get("BucketLifecycleConfigurationList")
+        )
+        if raw is None:
+            return False
+        if isinstance(raw, str):
+            if raw in ("", "null", "None"):
+                return False
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                return None
+        if isinstance(raw, dict):
+            rules = raw.get("rules") or raw.get("Rules") or []
+            return bool(rules)
+        if isinstance(raw, list):
+            return bool(raw)
+        return None
+
     def wait_for_config_item_after(
         self,
         resource_id: str,
@@ -123,6 +148,7 @@ class ComplianceChecker:
         timeout_seconds: int = 300,
         poll_seconds: int = 5,
         expected_versioning: Optional[str] = None,
+        expected_lifecycle: Optional[bool] = None,
     ) -> None:
         if is_dry_run():
             log(f"Dry-run – skipping CI freshness wait for {resource_id}")
@@ -137,23 +163,26 @@ class ComplianceChecker:
                 captured = ci.get("configurationItemCaptureTime")
                 captured_epoch = _to_epoch(captured)
                 ver = self._s3_versioning_status(ci)
+                has_lc = self._s3_has_lifecycle(ci)
                 fresh = captured_epoch >= after_timestamp
                 ver_ok = expected_versioning is None or (
                     ver is not None and ver.lower() == expected_versioning.lower()
                 )
+                lc_ok = expected_lifecycle is None or has_lc is expected_lifecycle
 
-                if fresh and ver_ok:
+                if fresh and ver_ok and lc_ok:
                     log(
                         f"Config CI for {resource_id} is ready "
-                        f"(captured={captured}, versioning={ver}, attempt={attempt})"
+                        f"(captured={captured}, versioning={ver}, "
+                        f"lifecycle={has_lc}, attempt={attempt})"
                     )
                     return
 
                 log(
                     f"Config CI for {resource_id} not ready yet "
-                    f"(captured={captured}, versioning={ver}, "
+                    f"(captured={captured}, versioning={ver}, lifecycle={has_lc}, "
                     f"need_ts>={after_timestamp:.0f}, need_ver={expected_versioning}, "
-                    f"attempt={attempt})"
+                    f"need_lc={expected_lifecycle}, attempt={attempt})"
                 )
             else:
                 log(f"No Config CI yet for {resource_id} (attempt={attempt})")
@@ -163,7 +192,7 @@ class ComplianceChecker:
         raise TimeoutError(
             f"Timed out after {timeout_seconds}s waiting for Config CI for "
             f"{resource_type} {resource_id} (need after {after_timestamp:.0f}, "
-            f"versioning={expected_versioning})"
+            f"versioning={expected_versioning}, lifecycle={expected_lifecycle})"
         )
 
     def get_results_for_rule(
@@ -254,7 +283,6 @@ class ComplianceChecker:
                 )
                 return matching
 
-            # Show what we do see for this resource (even wrong type) for debugging
             any_for_resource = self._matching_results(
                 last_results, resource_id, after_timestamp=after_timestamp
             )

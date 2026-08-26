@@ -1,16 +1,15 @@
 """
 First vertical slice – S3 managed rules.
 
-By default this test runs only a small allowlist of rules so we can iterate
-quickly without rate limits or unrelated CloudTrail/CloudFront/etc rules.
-
-Set env ALLOW_ALL_S3_RULES=1 to run every rule returned by the catalog.
+Default allowlist covers versioning + lifecycle rules. Set ALLOW_ALL_S3_RULES=1
+to run every rule returned by the catalog (not recommended until strategies exist).
 """
 
 from __future__ import annotations
 
 import os
 import time
+from typing import Optional
 
 import pytest
 
@@ -21,20 +20,68 @@ from harness.dry_run import log
 from harness.s3_toggle import S3Toggle
 
 DEFAULT_ALLOWLIST = {
+    # Versioning
     "S3_BUCKET_VERSIONING_ENABLED",
     "s3-bucket-versioning-enabled",
     "RULE#s3-bucket-versioning-enabled",
+    # Lifecycle (general)
+    "S3_LIFECYCLE_POLICY_CHECK",
+    "s3-lifecycle-policy-check",
+    "RULE#s3-lifecycle-policy-check",
+    # Lifecycle on versioned buckets
+    "S3_VERSION_LIFECYCLE_POLICY_CHECK",
+    "s3-version-lifecycle-policy-check",
+    "RULE#s3-version-lifecycle-policy-check",
+}
+
+# source_identifier → (toggle_strategy, expected_versioning NC, expected_lifecycle NC,
+#                      expected_versioning C, expected_lifecycle C)
+# expected_* is None when that attribute is not asserted on the CI wait.
+RULE_PROFILES = {
+    "S3_BUCKET_VERSIONING_ENABLED": {
+        "strategy": "s3_versioning",
+        "nc_versioning": "Suspended",
+        "nc_lifecycle": None,
+        "c_versioning": "Enabled",
+        "c_lifecycle": None,
+    },
+    "S3_LIFECYCLE_POLICY_CHECK": {
+        "strategy": "s3_lifecycle",
+        "nc_versioning": None,
+        "nc_lifecycle": False,
+        "c_versioning": None,
+        "c_lifecycle": True,
+    },
+    "S3_VERSION_LIFECYCLE_POLICY_CHECK": {
+        "strategy": "s3_version_lifecycle",
+        "nc_versioning": "Enabled",
+        "nc_lifecycle": False,
+        "c_versioning": "Enabled",
+        "c_lifecycle": True,
+    },
 }
 
 
 def _is_allowed(spec: ManagedRuleSpec) -> bool:
     if os.environ.get("ALLOW_ALL_S3_RULES") == "1":
         return True
+    tokens = (
+        "s3-bucket-versioning-enabled",
+        "s3-lifecycle-policy-check",
+        "s3-version-lifecycle-policy-check",
+    )
     return (
         spec.source_identifier in DEFAULT_ALLOWLIST
         or spec.rule_name in DEFAULT_ALLOWLIST
-        or any(token in spec.rule_name for token in ("s3-bucket-versioning-enabled",))
+        or any(t in spec.rule_name for t in tokens)
     )
+
+
+def _profile_for(spec: ManagedRuleSpec) -> dict:
+    if spec.source_identifier in RULE_PROFILES:
+        return RULE_PROFILES[spec.source_identifier]
+    # Fallback: treat as versioning
+    return RULE_PROFILES["S3_BUCKET_VERSIONING_ENABLED"]
 
 
 def _run_one_leg(
@@ -44,18 +91,20 @@ def _run_one_leg(
     s3_toggle: S3Toggle,
     s3_test_bucket: str,
     rule_name: str,
-    toggle_strategy: str,
+    strategy: str,
     compliant: bool,
     expected: str,
-    expected_versioning: str,
+    expected_versioning: Optional[str],
+    expected_lifecycle: Optional[bool],
 ) -> None:
-    s3_toggle.apply_strategy(toggle_strategy, compliant=compliant)
+    s3_toggle.apply_strategy(strategy, compliant=compliant)
     change_ts = time.time()
     compliance.wait_for_config_item_after(
         resource_id=s3_test_bucket,
         after_timestamp=change_ts,
         resource_type="AWS::S3::Bucket",
         expected_versioning=expected_versioning,
+        expected_lifecycle=expected_lifecycle,
     )
     eval_ts = time.time()
     config_mgr.start_evaluation(rule_name)
@@ -95,8 +144,10 @@ def test_s3_rule_compliance_cycle(
 
     for spec in selected:
         rule_name = None
+        profile = _profile_for(spec)
         try:
             log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
+            log(f"Using strategy={profile['strategy']}")
 
             rule_name = config_mgr.put_managed_rule(spec)
 
@@ -106,10 +157,11 @@ def test_s3_rule_compliance_cycle(
                 s3_toggle=s3_toggle,
                 s3_test_bucket=s3_test_bucket,
                 rule_name=rule_name,
-                toggle_strategy=spec.toggle_strategy,
+                strategy=profile["strategy"],
                 compliant=False,
                 expected="NON_COMPLIANT",
-                expected_versioning="Suspended",
+                expected_versioning=profile["nc_versioning"],
+                expected_lifecycle=profile["nc_lifecycle"],
             )
 
             _run_one_leg(
@@ -118,10 +170,11 @@ def test_s3_rule_compliance_cycle(
                 s3_toggle=s3_toggle,
                 s3_test_bucket=s3_test_bucket,
                 rule_name=rule_name,
-                toggle_strategy=spec.toggle_strategy,
+                strategy=profile["strategy"],
                 compliant=True,
                 expected="COMPLIANT",
-                expected_versioning="Enabled",
+                expected_versioning=profile["c_versioning"],
+                expected_lifecycle=profile["c_lifecycle"],
             )
 
             log(f"✓ {spec.rule_name} passed full compliance cycle", style="green")
@@ -132,7 +185,6 @@ def test_s3_rule_compliance_cycle(
 
         finally:
             if rule_name:
-                # Never let cleanup fail a green compliance cycle
                 try:
                     config_mgr.delete_rule(rule_name)
                 except Exception as cleanup_exc:
