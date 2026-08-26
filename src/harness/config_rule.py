@@ -5,11 +5,11 @@ Helpers for creating, evaluating and deleting AWS Config managed rules.
 from __future__ import annotations
 
 import json
-import time
 from typing import Any, Dict, Optional
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError, ReadTimeoutError, ConnectTimeoutError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -30,10 +30,14 @@ class ConfigRuleManager:
     def __init__(self, region: Optional[str] = None, test_run_id: str = "unknown"):
         self.region = region or "us-east-1"
         self.test_run_id = test_run_id
-        self.client = boto3.client("config", region_name=self.region)
+        # Keep API calls from hanging the whole pytest session
+        self.client = boto3.client(
+            "config",
+            region_name=self.region,
+            config=BotoConfig(connect_timeout=10, read_timeout=30, retries={"max_attempts": 3}),
+        )
 
     def _rule_name_for_run(self, base_name: str) -> str:
-        """Make the Config rule name unique per test run and valid for AWS Config."""
         import re
 
         safe = re.sub(r"[^a-zA-Z0-9_-]", "-", base_name)
@@ -42,7 +46,6 @@ class ConfigRuleManager:
 
     @dry_run_guard("PutConfigRule")
     def put_managed_rule(self, spec: ManagedRuleSpec) -> str:
-        """Create (or update) a managed Config rule; return the concrete rule name."""
         rule_name = self._rule_name_for_run(spec.rule_name)
         log(f"Putting managed rule {rule_name} (source={spec.source_identifier})")
 
@@ -85,14 +88,25 @@ class ConfigRuleManager:
 
     @dry_run_guard("DeleteConfigRule")
     def delete_rule(self, rule_name: str) -> None:
+        """Best-effort delete; never raise on timeout or transient errors."""
         log(f"Deleting Config rule {rule_name}")
         try:
             self.client.delete_config_rule(ConfigRuleName=rule_name)
         except ClientError as exc:
-            if "NoSuchConfigRuleException" in str(exc):
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in ("NoSuchConfigRuleException", "ResourceNotFoundException"):
                 log(f"Rule {rule_name} already gone")
+            elif code == "ResourceInUseException":
+                log(
+                    f"Rule {rule_name} still in use; delete will complete asynchronously",
+                    style="yellow",
+                )
             else:
-                raise
+                log(f"Cleanup warning for {rule_name}: {exc}", style="yellow")
+        except (ReadTimeoutError, ConnectTimeoutError, TimeoutError) as exc:
+            log(f"Cleanup timeout for {rule_name} (ignored): {exc}", style="yellow")
+        except Exception as exc:
+            log(f"Cleanup warning for {rule_name}: {exc}", style="yellow")
 
     @retry(
         retry=retry_if_exception_type(RateLimitedError),
@@ -119,7 +133,6 @@ class ConfigRuleManager:
 
     @retry(stop=stop_after_attempt(30), wait=wait_exponential(multiplier=1, min=2, max=15))
     def wait_for_evaluation(self, rule_name: str, after_timestamp: float) -> None:
-        """Poll until a successful evaluation newer than *after_timestamp*."""
         if is_dry_run():
             log(f"Dry-run – skipping wait for evaluation of {rule_name}")
             return

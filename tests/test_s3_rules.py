@@ -49,7 +49,6 @@ def _run_one_leg(
     expected: str,
     expected_versioning: str,
 ) -> None:
-    """Toggle → wait for CI → evaluate → assert, with clocks after CI is ready."""
     s3_toggle.apply_strategy(toggle_strategy, compliant=compliant)
     change_ts = time.time()
     compliance.wait_for_config_item_after(
@@ -58,7 +57,6 @@ def _run_one_leg(
         resource_type="AWS::S3::Bucket",
         expected_versioning=expected_versioning,
     )
-    # Critical: do not accept evaluations that finished before the CI was ready
     eval_ts = time.time()
     config_mgr.start_evaluation(rule_name)
     config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
@@ -81,7 +79,6 @@ def test_s3_rule_compliance_cycle(
     s3_toggle: S3Toggle,
     s3_test_bucket: str,
 ) -> None:
-    """Run the Put → NON_COMPLIANT → COMPLIANT → Delete cycle for allowed rules."""
     if not s3_rules:
         pytest.skip("No S3 rules available from the catalog")
 
@@ -135,6 +132,7 @@ def test_s3_rule_compliance_cycle(
 
         finally:
             if rule_name:
+                # Never let cleanup fail a green compliance cycle
                 try:
                     config_mgr.delete_rule(rule_name)
                 except Exception as cleanup_exc:
