@@ -20,7 +20,7 @@ minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra --strict-markers"
-timeout = 300
+timeout = 900
 markers = [
     "s3: tests that exercise S3-related managed rules",
     "slow: tests that take longer (full evaluation cycles)",

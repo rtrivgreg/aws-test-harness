@@ -30,11 +30,12 @@ class ConfigRuleManager:
     def __init__(self, region: Optional[str] = None, test_run_id: str = "unknown"):
         self.region = region or "us-east-1"
         self.test_run_id = test_run_id
-        # Keep API calls from hanging the whole pytest session
         self.client = boto3.client(
             "config",
             region_name=self.region,
-            config=BotoConfig(connect_timeout=10, read_timeout=30, retries={"max_attempts": 3}),
+            config=BotoConfig(
+                connect_timeout=10, read_timeout=30, retries={"max_attempts": 3}
+            ),
         )
 
     def _rule_name_for_run(self, base_name: str) -> str:
@@ -51,7 +52,8 @@ class ConfigRuleManager:
 
         config_rule: Dict[str, Any] = {
             "ConfigRuleName": rule_name,
-            "Description": spec.description or f"Harness test for {spec.source_identifier}",
+            "Description": spec.description
+            or f"Harness test for {spec.source_identifier}",
             "Source": {
                 "Owner": "AWS",
                 "SourceIdentifier": spec.source_identifier,
@@ -88,7 +90,6 @@ class ConfigRuleManager:
 
     @dry_run_guard("DeleteConfigRule")
     def delete_rule(self, rule_name: str) -> None:
-        """Best-effort delete; never raise on timeout or transient errors."""
         log(f"Deleting Config rule {rule_name}")
         try:
             self.client.delete_config_rule(ConfigRuleName=rule_name)
@@ -131,7 +132,11 @@ class ConfigRuleManager:
                 raise RateLimitedError(str(exc)) from exc
             raise
 
-    @retry(stop=stop_after_attempt(30), wait=wait_exponential(multiplier=1, min=2, max=15))
+    @retry(
+        stop=stop_after_attempt(40),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        reraise=True,
+    )
     def wait_for_evaluation(self, rule_name: str, after_timestamp: float) -> None:
         if is_dry_run():
             log(f"Dry-run – skipping wait for evaluation of {rule_name}")
@@ -146,7 +151,15 @@ class ConfigRuleManager:
 
         status = statuses[0]
         last_success = status.get("LastSuccessfulEvaluationTime")
+        last_failed = status.get("LastFailedEvaluationTime")
+        last_error = status.get("LastErrorCode")
+        last_msg = status.get("LastErrorMessage")
+
         if last_success is None:
+            log(
+                f"Waiting for evaluation of {rule_name} "
+                f"(last_failed={last_failed}, error={last_error}: {last_msg})"
+            )
             raise RuntimeError("Evaluation has not completed yet")
 
         last_epoch = (
@@ -155,6 +168,10 @@ class ConfigRuleManager:
             else float(last_success)
         )
         if last_epoch < after_timestamp:
+            log(
+                f"Waiting for evaluation of {rule_name} newer than {after_timestamp:.0f} "
+                f"(last_success={last_success})"
+            )
             raise RuntimeError(
                 "Evaluation timestamp is still older than the change we made"
             )
