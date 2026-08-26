@@ -1,11 +1,5 @@
 """
 Compliance result helpers.
-
-Config lag handling:
-1. Wait for resource discovery before any rule work.
-2. After mutation, wait until the CI reflects the intended state.
-3. Poll evaluation results until a *new* result for the resource appears
-   (ResultRecordedTime / ConfigRuleInvokedTime after the change).
 """
 
 from __future__ import annotations
@@ -200,6 +194,7 @@ class ComplianceChecker:
         results: List[dict],
         resource_id: str,
         after_timestamp: Optional[float] = None,
+        expected: Optional[str] = None,
     ) -> List[dict]:
         matched = []
         for r in results:
@@ -215,6 +210,8 @@ class ComplianceChecker:
                 )
                 if recorded < after_timestamp:
                     continue
+            if expected is not None and r.get("ComplianceType") != expected:
+                continue
             matched.append(r)
         return matched
 
@@ -222,8 +219,9 @@ class ComplianceChecker:
         self,
         rule_name: str,
         resource_id: str,
+        expected: str,
         timeout_seconds: int = 180,
-        poll_seconds: int = 10,
+        poll_seconds: int = 8,
         config_mgr=None,
         after_timestamp: Optional[float] = None,
     ) -> List[dict]:
@@ -238,10 +236,12 @@ class ComplianceChecker:
             attempt += 1
             last_results = self.get_results_for_rule(rule_name)
             matching = self._matching_results(
-                last_results, resource_id, after_timestamp=after_timestamp
+                last_results,
+                resource_id,
+                after_timestamp=after_timestamp,
+                expected=expected,
             )
             if matching:
-                # Prefer the newest matching result
                 matching.sort(
                     key=lambda r: _to_epoch(
                         r.get("ResultRecordedTime") or r.get("ConfigRuleInvokedTime")
@@ -254,9 +254,14 @@ class ComplianceChecker:
                 )
                 return matching
 
+            # Show what we do see for this resource (even wrong type) for debugging
+            any_for_resource = self._matching_results(
+                last_results, resource_id, after_timestamp=after_timestamp
+            )
+            seen = [r.get("ComplianceType") for r in any_for_resource] or ["none"]
             log(
-                f"Waiting for new evaluation of {resource_id} under {rule_name} "
-                f"(attempt {attempt}; {len(last_results)} result(s) so far)"
+                f"Waiting for {expected} on {resource_id} under {rule_name} "
+                f"(attempt {attempt}; post-ts types seen={seen})"
             )
 
             if config_mgr is not None and attempt % 3 == 0:
@@ -268,7 +273,7 @@ class ComplianceChecker:
             time.sleep(poll_seconds)
 
         raise AssertionError(
-            f"Timed out after {timeout_seconds}s waiting for a new evaluation of "
+            f"Timed out after {timeout_seconds}s waiting for {expected} on "
             f"resource {resource_id} under rule {rule_name} "
             f"(after_ts={after_timestamp}). Last results: {last_results}"
         )
@@ -290,6 +295,7 @@ class ComplianceChecker:
         matching = self.wait_for_resource_result(
             rule_name=rule_name,
             resource_id=resource_id,
+            expected=expected,
             timeout_seconds=timeout_seconds,
             config_mgr=config_mgr,
             after_timestamp=after_timestamp,
