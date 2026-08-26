@@ -37,6 +37,41 @@ def _is_allowed(spec: ManagedRuleSpec) -> bool:
     )
 
 
+def _run_one_leg(
+    *,
+    config_mgr: ConfigRuleManager,
+    compliance: ComplianceChecker,
+    s3_toggle: S3Toggle,
+    s3_test_bucket: str,
+    rule_name: str,
+    toggle_strategy: str,
+    compliant: bool,
+    expected: str,
+    expected_versioning: str,
+) -> None:
+    """Toggle → wait for CI → evaluate → assert, with clocks after CI is ready."""
+    s3_toggle.apply_strategy(toggle_strategy, compliant=compliant)
+    change_ts = time.time()
+    compliance.wait_for_config_item_after(
+        resource_id=s3_test_bucket,
+        after_timestamp=change_ts,
+        resource_type="AWS::S3::Bucket",
+        expected_versioning=expected_versioning,
+    )
+    # Critical: do not accept evaluations that finished before the CI was ready
+    eval_ts = time.time()
+    config_mgr.start_evaluation(rule_name)
+    config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
+    compliance.assert_resource_compliance(
+        rule_name=rule_name,
+        resource_id=s3_test_bucket,
+        expected=expected,
+        resource_type="AWS::S3::Bucket",
+        config_mgr=config_mgr,
+        after_timestamp=eval_ts,
+    )
+
+
 @pytest.mark.s3
 @pytest.mark.slow
 def test_s3_rule_compliance_cycle(
@@ -68,44 +103,28 @@ def test_s3_rule_compliance_cycle(
 
             rule_name = config_mgr.put_managed_rule(spec)
 
-            # NON_COMPLIANT path – versioning Suspended
-            s3_toggle.apply_strategy(spec.toggle_strategy, compliant=False)
-            change_ts = time.time()
-            compliance.wait_for_config_item_after(
-                resource_id=s3_test_bucket,
-                after_timestamp=change_ts,
-                resource_type="AWS::S3::Bucket",
+            _run_one_leg(
+                config_mgr=config_mgr,
+                compliance=compliance,
+                s3_toggle=s3_toggle,
+                s3_test_bucket=s3_test_bucket,
+                rule_name=rule_name,
+                toggle_strategy=spec.toggle_strategy,
+                compliant=False,
+                expected="NON_COMPLIANT",
                 expected_versioning="Suspended",
             )
-            config_mgr.start_evaluation(rule_name)
-            config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
-            compliance.assert_resource_compliance(
-                rule_name=rule_name,
-                resource_id=s3_test_bucket,
-                expected="NON_COMPLIANT",
-                resource_type="AWS::S3::Bucket",
-                config_mgr=config_mgr,
-                after_timestamp=change_ts,
-            )
 
-            # COMPLIANT path – versioning Enabled
-            s3_toggle.apply_strategy(spec.toggle_strategy, compliant=True)
-            change_ts = time.time()
-            compliance.wait_for_config_item_after(
-                resource_id=s3_test_bucket,
-                after_timestamp=change_ts,
-                resource_type="AWS::S3::Bucket",
-                expected_versioning="Enabled",
-            )
-            config_mgr.start_evaluation(rule_name)
-            config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
-            compliance.assert_resource_compliance(
-                rule_name=rule_name,
-                resource_id=s3_test_bucket,
-                expected="COMPLIANT",
-                resource_type="AWS::S3::Bucket",
+            _run_one_leg(
                 config_mgr=config_mgr,
-                after_timestamp=change_ts,
+                compliance=compliance,
+                s3_toggle=s3_toggle,
+                s3_test_bucket=s3_test_bucket,
+                rule_name=rule_name,
+                toggle_strategy=spec.toggle_strategy,
+                compliant=True,
+                expected="COMPLIANT",
+                expected_versioning="Enabled",
             )
 
             log(f"✓ {spec.rule_name} passed full compliance cycle", style="green")
