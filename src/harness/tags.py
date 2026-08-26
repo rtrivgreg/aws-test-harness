@@ -19,8 +19,8 @@ PURPOSE_TAG_VALUE = "aws-config-rule-testing"
 
 
 def generate_test_run_id() -> str:
-    """Return a new unique test-run-id (short UUID)."""
-    return str(uuid.uuid4())[:8]
+    """Return a new unique test-run-id (short UUID, always lowercase)."""
+    return str(uuid.uuid4())[:8].lower()
 
 
 def get_test_run_id() -> str:
@@ -28,11 +28,11 @@ def get_test_run_id() -> str:
     Resolve the test-run-id for the current process.
 
     Order of precedence:
-    1. Environment variable TEST_RUN_ID
-    2. Newly generated short UUID
+    1. Environment variable TEST_RUN_ID (forced to lowercase)
+    2. Newly generated short UUID (already lowercase)
     """
-    return os.environ.get("TEST_RUN_ID") or generate_test_run_id()
-
+    rid = os.environ.get("TEST_RUN_ID") or generate_test_run_id()
+    return rid.lower()
 
 def standard_tags(test_run_id: str, extra: Dict[str, str] | None = None) -> Dict[str, str]:
     """Return the canonical tag set that every harness resource must have."""
