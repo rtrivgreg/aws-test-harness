@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aws-config-test-harness"
+version = "0.1.0"
+description = "Test harness for AWS Config managed rules and conformance packs"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.34.0",
+    "pytest>=8.0.0",
+    "PyYAML>=6.0.1",
+    "tenacity>=8.2.0",
+    "rich>=13.7.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+timeout = 300
+markers = [
+    "s3: tests that exercise S3-related managed rules",
+    "slow: tests that take longer (full evaluation cycles)",
+    "dry_run: tests that only print actions",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

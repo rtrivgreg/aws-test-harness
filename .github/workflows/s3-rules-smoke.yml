@@ -1,0 +1,57 @@
+name: S3 Config Rules Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "terraform/**"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # Requires OIDC or stored credentials with the necessary Config + S3 + DynamoDB permissions
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: us-east-1
+      CATALOG_TABLE_NAME: ${{ vars.CATALOG_TABLE_NAME }}
+      CATALOG_GROUP: ${{ vars.CATALOG_GROUP || 'default' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install -r requirements.txt
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform init & apply (test bucket)
+        working-directory: terraform
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false \
+            -var="test_run_id=${{ github.run_id }}" \
+            -var="aws_region=${{ env.AWS_REGION }}"
+
+      - name: Run S3 rule tests (dry-run first)
+        run: |
+          export TEST_RUN_ID=${{ github.run_id }}
+          pytest tests/test_s3_rules.py -v --dry-run
+
+      # Uncomment when credentials and catalog are ready for a real evaluation cycle
+      # - name: Run S3 rule tests (live)
+      #   run: |
+      #     export TEST_RUN_ID=${{ github.run_id }}
+      #     pytest tests/test_s3_rules.py -v
