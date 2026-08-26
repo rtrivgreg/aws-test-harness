@@ -1,8 +1,10 @@
 """
 S3 managed-rule compliance cycles.
 
-Default allowlist: versioning, lifecycle, encryption, public-access.
-Set ALLOW_ALL_S3_RULES=1 only after strategies exist for the rest.
+Default allowlist: versioning, lifecycle, public-access.
+S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED is intentionally omitted: modern S3
+default encryption means delete_bucket_encryption does not produce a CI with
+encryption absent, so the NON_COMPLIANT leg cannot be proven this way.
 """
 
 from __future__ import annotations
@@ -29,15 +31,11 @@ DEFAULT_ALLOWLIST = {
     "S3_VERSION_LIFECYCLE_POLICY_CHECK",
     "s3-version-lifecycle-policy-check",
     "RULE#s3-version-lifecycle-policy-check",
-    "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
-    "s3-bucket-server-side-encryption-enabled",
-    "RULE#s3-bucket-server-side-encryption-enabled",
     "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED",
     "s3-bucket-level-public-access-prohibited",
     "RULE#s3-bucket-level-public-access-prohibited",
 }
 
-# All expected_* fields default to None (not asserted on CI wait).
 RULE_PROFILES = {
     "S3_BUCKET_VERSIONING_ENABLED": {
         "strategy": "s3_versioning",
@@ -54,6 +52,7 @@ RULE_PROFILES = {
         "nc": {"versioning": "Enabled", "lifecycle": False},
         "c": {"versioning": "Enabled", "lifecycle": True},
     },
+    # Kept for optional manual runs; not in DEFAULT_ALLOWLIST
     "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED": {
         "strategy": "s3_encryption",
         "nc": {"encryption": False},
@@ -74,7 +73,6 @@ def _is_allowed(spec: ManagedRuleSpec) -> bool:
         "s3-bucket-versioning-enabled",
         "s3-lifecycle-policy-check",
         "s3-version-lifecycle-policy-check",
-        "s3-bucket-server-side-encryption-enabled",
         "s3-bucket-level-public-access-prohibited",
     )
     return (
