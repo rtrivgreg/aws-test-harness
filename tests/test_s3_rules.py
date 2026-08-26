@@ -1,8 +1,8 @@
 """
-First vertical slice – S3 managed rules.
+S3 managed-rule compliance cycles.
 
-Default allowlist covers versioning + lifecycle rules. Set ALLOW_ALL_S3_RULES=1
-to run every rule returned by the catalog (not recommended until strategies exist).
+Default allowlist: versioning, lifecycle, encryption, public-access.
+Set ALLOW_ALL_S3_RULES=1 only after strategies exist for the rest.
 """
 
 from __future__ import annotations
@@ -20,44 +20,49 @@ from harness.dry_run import log
 from harness.s3_toggle import S3Toggle
 
 DEFAULT_ALLOWLIST = {
-    # Versioning
     "S3_BUCKET_VERSIONING_ENABLED",
     "s3-bucket-versioning-enabled",
     "RULE#s3-bucket-versioning-enabled",
-    # Lifecycle (general)
     "S3_LIFECYCLE_POLICY_CHECK",
     "s3-lifecycle-policy-check",
     "RULE#s3-lifecycle-policy-check",
-    # Lifecycle on versioned buckets
     "S3_VERSION_LIFECYCLE_POLICY_CHECK",
     "s3-version-lifecycle-policy-check",
     "RULE#s3-version-lifecycle-policy-check",
+    "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
+    "s3-bucket-server-side-encryption-enabled",
+    "RULE#s3-bucket-server-side-encryption-enabled",
+    "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED",
+    "s3-bucket-level-public-access-prohibited",
+    "RULE#s3-bucket-level-public-access-prohibited",
 }
 
-# source_identifier → (toggle_strategy, expected_versioning NC, expected_lifecycle NC,
-#                      expected_versioning C, expected_lifecycle C)
-# expected_* is None when that attribute is not asserted on the CI wait.
+# All expected_* fields default to None (not asserted on CI wait).
 RULE_PROFILES = {
     "S3_BUCKET_VERSIONING_ENABLED": {
         "strategy": "s3_versioning",
-        "nc_versioning": "Suspended",
-        "nc_lifecycle": None,
-        "c_versioning": "Enabled",
-        "c_lifecycle": None,
+        "nc": {"versioning": "Suspended"},
+        "c": {"versioning": "Enabled"},
     },
     "S3_LIFECYCLE_POLICY_CHECK": {
         "strategy": "s3_lifecycle",
-        "nc_versioning": None,
-        "nc_lifecycle": False,
-        "c_versioning": None,
-        "c_lifecycle": True,
+        "nc": {"lifecycle": False},
+        "c": {"lifecycle": True},
     },
     "S3_VERSION_LIFECYCLE_POLICY_CHECK": {
         "strategy": "s3_version_lifecycle",
-        "nc_versioning": "Enabled",
-        "nc_lifecycle": False,
-        "c_versioning": "Enabled",
-        "c_lifecycle": True,
+        "nc": {"versioning": "Enabled", "lifecycle": False},
+        "c": {"versioning": "Enabled", "lifecycle": True},
+    },
+    "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED": {
+        "strategy": "s3_encryption",
+        "nc": {"encryption": False},
+        "c": {"encryption": True},
+    },
+    "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED": {
+        "strategy": "s3_public_access",
+        "nc": {"public_blocked": False},
+        "c": {"public_blocked": True},
     },
 }
 
@@ -69,6 +74,8 @@ def _is_allowed(spec: ManagedRuleSpec) -> bool:
         "s3-bucket-versioning-enabled",
         "s3-lifecycle-policy-check",
         "s3-version-lifecycle-policy-check",
+        "s3-bucket-server-side-encryption-enabled",
+        "s3-bucket-level-public-access-prohibited",
     )
     return (
         spec.source_identifier in DEFAULT_ALLOWLIST
@@ -80,7 +87,6 @@ def _is_allowed(spec: ManagedRuleSpec) -> bool:
 def _profile_for(spec: ManagedRuleSpec) -> dict:
     if spec.source_identifier in RULE_PROFILES:
         return RULE_PROFILES[spec.source_identifier]
-    # Fallback: treat as versioning
     return RULE_PROFILES["S3_BUCKET_VERSIONING_ENABLED"]
 
 
@@ -94,8 +100,7 @@ def _run_one_leg(
     strategy: str,
     compliant: bool,
     expected: str,
-    expected_versioning: Optional[str],
-    expected_lifecycle: Optional[bool],
+    expectations: dict,
 ) -> None:
     s3_toggle.apply_strategy(strategy, compliant=compliant)
     change_ts = time.time()
@@ -103,8 +108,10 @@ def _run_one_leg(
         resource_id=s3_test_bucket,
         after_timestamp=change_ts,
         resource_type="AWS::S3::Bucket",
-        expected_versioning=expected_versioning,
-        expected_lifecycle=expected_lifecycle,
+        expected_versioning=expectations.get("versioning"),
+        expected_lifecycle=expectations.get("lifecycle"),
+        expected_encryption=expectations.get("encryption"),
+        expected_public_blocked=expectations.get("public_blocked"),
     )
     eval_ts = time.time()
     config_mgr.start_evaluation(rule_name)
@@ -160,8 +167,7 @@ def test_s3_rule_compliance_cycle(
                 strategy=profile["strategy"],
                 compliant=False,
                 expected="NON_COMPLIANT",
-                expected_versioning=profile["nc_versioning"],
-                expected_lifecycle=profile["nc_lifecycle"],
+                expectations=profile["nc"],
             )
 
             _run_one_leg(
@@ -173,8 +179,7 @@ def test_s3_rule_compliance_cycle(
                 strategy=profile["strategy"],
                 compliant=True,
                 expected="COMPLIANT",
-                expected_versioning=profile["c_versioning"],
-                expected_lifecycle=profile["c_lifecycle"],
+                expectations=profile["c"],
             )
 
             log(f"✓ {spec.rule_name} passed full compliance cycle", style="green")

@@ -22,6 +22,19 @@ def _to_epoch(value) -> float:
     return float(value)
 
 
+def _parse_supp(raw):
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        if raw in ("", "null", "None"):
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return raw
+
+
 class ComplianceChecker:
     def __init__(self, region: Optional[str] = None):
         self.region = region or "us-east-1"
@@ -101,44 +114,73 @@ class ComplianceChecker:
     @staticmethod
     def _s3_versioning_status(ci: dict) -> Optional[str]:
         supp = ci.get("supplementaryConfiguration") or {}
-        raw = supp.get("BucketVersioningConfiguration") or supp.get(
-            "VersioningConfiguration"
+        raw = _parse_supp(
+            supp.get("BucketVersioningConfiguration")
+            or supp.get("VersioningConfiguration")
         )
-        if not raw:
-            return None
-        if isinstance(raw, str):
-            try:
-                raw = json.loads(raw)
-            except json.JSONDecodeError:
-                return None
         if isinstance(raw, dict):
             return raw.get("status") or raw.get("Status")
         return None
 
     @staticmethod
     def _s3_has_lifecycle(ci: dict) -> Optional[bool]:
-        """True if CI shows at least one lifecycle rule; False if explicitly empty; None if unknown."""
         supp = ci.get("supplementaryConfiguration") or {}
-        raw = (
+        raw = _parse_supp(
             supp.get("BucketLifecycleConfiguration")
             or supp.get("LifecycleConfiguration")
             or supp.get("BucketLifecycleConfigurationList")
         )
         if raw is None:
             return False
-        if isinstance(raw, str):
-            if raw in ("", "null", "None"):
-                return False
-            try:
-                raw = json.loads(raw)
-            except json.JSONDecodeError:
-                return None
         if isinstance(raw, dict):
             rules = raw.get("rules") or raw.get("Rules") or []
             return bool(rules)
         if isinstance(raw, list):
             return bool(raw)
         return None
+
+    @staticmethod
+    def _s3_has_encryption(ci: dict) -> Optional[bool]:
+        supp = ci.get("supplementaryConfiguration") or {}
+        raw = _parse_supp(
+            supp.get("ServerSideEncryptionConfiguration")
+            or supp.get("BucketEncryption")
+            or supp.get("BucketServerSideEncryptionConfiguration")
+        )
+        if raw is None:
+            return False
+        if isinstance(raw, dict):
+            rules = raw.get("rules") or raw.get("Rules") or []
+            return bool(rules)
+        if isinstance(raw, list):
+            return bool(raw)
+        return None
+
+    @staticmethod
+    def _s3_public_access_fully_blocked(ci: dict) -> Optional[bool]:
+        supp = ci.get("supplementaryConfiguration") or {}
+        raw = _parse_supp(
+            supp.get("PublicAccessBlockConfiguration")
+            or supp.get("BucketPublicAccessBlockConfiguration")
+        )
+        if not isinstance(raw, dict):
+            return None
+
+        def flag(keys):
+            for k in keys:
+                if k in raw:
+                    return bool(raw[k])
+            return None
+
+        vals = [
+            flag(("blockPublicAcls", "BlockPublicAcls")),
+            flag(("ignorePublicAcls", "IgnorePublicAcls")),
+            flag(("blockPublicPolicy", "BlockPublicPolicy")),
+            flag(("restrictPublicBuckets", "RestrictPublicBuckets")),
+        ]
+        if any(v is None for v in vals):
+            return None
+        return all(vals)
 
     def wait_for_config_item_after(
         self,
@@ -149,6 +191,8 @@ class ComplianceChecker:
         poll_seconds: int = 5,
         expected_versioning: Optional[str] = None,
         expected_lifecycle: Optional[bool] = None,
+        expected_encryption: Optional[bool] = None,
+        expected_public_blocked: Optional[bool] = None,
     ) -> None:
         if is_dry_run():
             log(f"Dry-run – skipping CI freshness wait for {resource_id}")
@@ -164,25 +208,35 @@ class ComplianceChecker:
                 captured_epoch = _to_epoch(captured)
                 ver = self._s3_versioning_status(ci)
                 has_lc = self._s3_has_lifecycle(ci)
+                has_enc = self._s3_has_encryption(ci)
+                pub_blocked = self._s3_public_access_fully_blocked(ci)
+
                 fresh = captured_epoch >= after_timestamp
                 ver_ok = expected_versioning is None or (
                     ver is not None and ver.lower() == expected_versioning.lower()
                 )
                 lc_ok = expected_lifecycle is None or has_lc is expected_lifecycle
+                enc_ok = expected_encryption is None or has_enc is expected_encryption
+                pub_ok = (
+                    expected_public_blocked is None
+                    or pub_blocked is expected_public_blocked
+                )
 
-                if fresh and ver_ok and lc_ok:
+                if fresh and ver_ok and lc_ok and enc_ok and pub_ok:
                     log(
                         f"Config CI for {resource_id} is ready "
-                        f"(captured={captured}, versioning={ver}, "
-                        f"lifecycle={has_lc}, attempt={attempt})"
+                        f"(captured={captured}, ver={ver}, lc={has_lc}, "
+                        f"enc={has_enc}, pubBlocked={pub_blocked}, attempt={attempt})"
                     )
                     return
 
                 log(
                     f"Config CI for {resource_id} not ready yet "
-                    f"(captured={captured}, versioning={ver}, lifecycle={has_lc}, "
-                    f"need_ts>={after_timestamp:.0f}, need_ver={expected_versioning}, "
-                    f"need_lc={expected_lifecycle}, attempt={attempt})"
+                    f"(captured={captured}, ver={ver}, lc={has_lc}, enc={has_enc}, "
+                    f"pubBlocked={pub_blocked}, need_ts>={after_timestamp:.0f}, "
+                    f"need_ver={expected_versioning}, need_lc={expected_lifecycle}, "
+                    f"need_enc={expected_encryption}, need_pub={expected_public_blocked}, "
+                    f"attempt={attempt})"
                 )
             else:
                 log(f"No Config CI yet for {resource_id} (attempt={attempt})")
@@ -191,8 +245,7 @@ class ComplianceChecker:
 
         raise TimeoutError(
             f"Timed out after {timeout_seconds}s waiting for Config CI for "
-            f"{resource_type} {resource_id} (need after {after_timestamp:.0f}, "
-            f"versioning={expected_versioning}, lifecycle={expected_lifecycle})"
+            f"{resource_type} {resource_id}"
         )
 
     def get_results_for_rule(
