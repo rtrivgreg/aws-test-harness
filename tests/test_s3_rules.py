@@ -85,6 +85,7 @@ def test_s3_rule_compliance_cycle(
                 expected="NON_COMPLIANT",
                 resource_type="AWS::S3::Bucket",
                 config_mgr=config_mgr,
+                after_timestamp=change_ts,
             )
 
             # COMPLIANT path – versioning Enabled
@@ -104,6 +105,7 @@ def test_s3_rule_compliance_cycle(
                 expected="COMPLIANT",
                 resource_type="AWS::S3::Bucket",
                 config_mgr=config_mgr,
+                after_timestamp=change_ts,
             )
 
             log(f"✓ {spec.rule_name} passed full compliance cycle", style="green")

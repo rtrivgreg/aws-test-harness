@@ -3,20 +3,29 @@ Compliance result helpers.
 
 Config lag handling:
 1. Wait for resource discovery before any rule work.
-2. After mutation, wait until the CI reflects the intended state (not just a newer timestamp).
-3. Poll evaluation results until the target resource appears.
+2. After mutation, wait until the CI reflects the intended state.
+3. Poll evaluation results until a *new* result for the resource appears
+   (ResultRecordedTime / ConfigRuleInvokedTime after the change).
 """
 
 from __future__ import annotations
 
 import json
 import time
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
 
 from harness.dry_run import is_dry_run, log
+
+
+def _to_epoch(value) -> float:
+    if value is None:
+        return 0.0
+    if hasattr(value, "timestamp"):
+        return value.timestamp()
+    return float(value)
 
 
 class ComplianceChecker:
@@ -75,9 +84,7 @@ class ComplianceChecker:
             f"{resource_type} {resource_id}. Check the configuration recorder."
         )
 
-    def _latest_ci(
-        self, resource_id: str, resource_type: str
-    ) -> Optional[dict]:
+    def _latest_ci(self, resource_id: str, resource_type: str) -> Optional[dict]:
         try:
             resp = self.client.get_resource_config_history(
                 resourceType=resource_type,
@@ -99,7 +106,6 @@ class ComplianceChecker:
 
     @staticmethod
     def _s3_versioning_status(ci: dict) -> Optional[str]:
-        """Extract versioning status from an S3 configuration item if present."""
         supp = ci.get("supplementaryConfiguration") or {}
         raw = supp.get("BucketVersioningConfiguration") or supp.get(
             "VersioningConfiguration"
@@ -124,12 +130,6 @@ class ComplianceChecker:
         poll_seconds: int = 5,
         expected_versioning: Optional[str] = None,
     ) -> None:
-        """
-        Wait until Config has a CI newer than after_timestamp.
-
-        If expected_versioning is set ("Enabled" or "Suspended"), also require
-        that the CI's BucketVersioningConfiguration matches.
-        """
         if is_dry_run():
             log(f"Dry-run – skipping CI freshness wait for {resource_id}")
             return
@@ -141,13 +141,7 @@ class ComplianceChecker:
             ci = self._latest_ci(resource_id, resource_type)
             if ci:
                 captured = ci.get("configurationItemCaptureTime")
-                captured_epoch = 0.0
-                if captured is not None:
-                    captured_epoch = (
-                        captured.timestamp()
-                        if hasattr(captured, "timestamp")
-                        else float(captured)
-                    )
+                captured_epoch = _to_epoch(captured)
                 ver = self._s3_versioning_status(ci)
                 fresh = captured_epoch >= after_timestamp
                 ver_ok = expected_versioning is None or (
@@ -168,9 +162,7 @@ class ComplianceChecker:
                     f"attempt={attempt})"
                 )
             else:
-                log(
-                    f"No Config CI yet for {resource_id} (attempt={attempt})"
-                )
+                log(f"No Config CI yet for {resource_id} (attempt={attempt})")
 
             time.sleep(poll_seconds)
 
@@ -203,15 +195,28 @@ class ComplianceChecker:
 
         return results
 
-    def _matching_results(self, results: List[dict], resource_id: str) -> List[dict]:
-        return [
-            r
-            for r in results
-            if r.get("EvaluationResultIdentifier", {})
-            .get("EvaluationResultQualifier", {})
-            .get("ResourceId")
-            == resource_id
-        ]
+    def _matching_results(
+        self,
+        results: List[dict],
+        resource_id: str,
+        after_timestamp: Optional[float] = None,
+    ) -> List[dict]:
+        matched = []
+        for r in results:
+            qual = (
+                r.get("EvaluationResultIdentifier", {})
+                .get("EvaluationResultQualifier", {})
+            )
+            if qual.get("ResourceId") != resource_id:
+                continue
+            if after_timestamp is not None:
+                recorded = _to_epoch(
+                    r.get("ResultRecordedTime") or r.get("ConfigRuleInvokedTime")
+                )
+                if recorded < after_timestamp:
+                    continue
+            matched.append(r)
+        return matched
 
     def wait_for_resource_result(
         self,
@@ -220,6 +225,7 @@ class ComplianceChecker:
         timeout_seconds: int = 180,
         poll_seconds: int = 10,
         config_mgr=None,
+        after_timestamp: Optional[float] = None,
     ) -> List[dict]:
         if is_dry_run():
             return []
@@ -231,17 +237,26 @@ class ComplianceChecker:
         while time.time() < deadline:
             attempt += 1
             last_results = self.get_results_for_rule(rule_name)
-            matching = self._matching_results(last_results, resource_id)
+            matching = self._matching_results(
+                last_results, resource_id, after_timestamp=after_timestamp
+            )
             if matching:
+                # Prefer the newest matching result
+                matching.sort(
+                    key=lambda r: _to_epoch(
+                        r.get("ResultRecordedTime") or r.get("ConfigRuleInvokedTime")
+                    ),
+                    reverse=True,
+                )
                 log(
                     f"Found evaluation result for {resource_id} under {rule_name} "
-                    f"(attempt {attempt})"
+                    f"(attempt {attempt}, compliance={matching[0].get('ComplianceType')})"
                 )
                 return matching
 
             log(
-                f"Waiting for Config to evaluate {resource_id} under {rule_name} "
-                f"(attempt {attempt}; {len(last_results)} other result(s) so far)"
+                f"Waiting for new evaluation of {resource_id} under {rule_name} "
+                f"(attempt {attempt}; {len(last_results)} result(s) so far)"
             )
 
             if config_mgr is not None and attempt % 3 == 0:
@@ -253,8 +268,9 @@ class ComplianceChecker:
             time.sleep(poll_seconds)
 
         raise AssertionError(
-            f"Timed out after {timeout_seconds}s waiting for resource {resource_id} "
-            f"under rule {rule_name}. Last results: {last_results}"
+            f"Timed out after {timeout_seconds}s waiting for a new evaluation of "
+            f"resource {resource_id} under rule {rule_name} "
+            f"(after_ts={after_timestamp}). Last results: {last_results}"
         )
 
     def assert_resource_compliance(
@@ -265,6 +281,7 @@ class ComplianceChecker:
         resource_type: str = "AWS::S3::Bucket",
         config_mgr=None,
         timeout_seconds: int = 180,
+        after_timestamp: Optional[float] = None,
     ) -> None:
         if is_dry_run():
             log(f"Dry-run – would assert {resource_id} is {expected} under {rule_name}")
@@ -275,6 +292,7 @@ class ComplianceChecker:
             resource_id=resource_id,
             timeout_seconds=timeout_seconds,
             config_mgr=config_mgr,
+            after_timestamp=after_timestamp,
         )
 
         actual = matching[0].get("ComplianceType")
