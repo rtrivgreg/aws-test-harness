@@ -6,15 +6,24 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import boto3
 from botocore.exceptions import ClientError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from harness.catalog import ManagedRuleSpec
 from harness.dry_run import dry_run_guard, is_dry_run, log
-from harness.tags import TEST_RUN_ID_TAG_KEY, standard_tags
+from harness.tags import standard_tags
+
+
+class RateLimitedError(Exception):
+    """Raised so tenacity can retry StartConfigRulesEvaluation."""
 
 
 class ConfigRuleManager:
@@ -25,18 +34,15 @@ class ConfigRuleManager:
 
     def _rule_name_for_run(self, base_name: str) -> str:
         """Make the Config rule name unique per test run and valid for AWS Config."""
-        # Config rule names: only [a-zA-Z0-9_-], max 128 chars
         import re
+
         safe = re.sub(r"[^a-zA-Z0-9_-]", "-", base_name)
         safe = re.sub(r"-+", "-", safe).strip("-")[:80]
         return f"harness-{safe}-{self.test_run_id}"
 
     @dry_run_guard("PutConfigRule")
     def put_managed_rule(self, spec: ManagedRuleSpec) -> str:
-        """
-        Create (or update) a managed Config rule using the parameters from the catalog.
-        Returns the concrete Config rule name that was created.
-        """
+        """Create (or update) a managed Config rule; return the concrete rule name."""
         rule_name = self._rule_name_for_run(spec.rule_name)
         log(f"Putting managed rule {rule_name} (source={spec.source_identifier})")
 
@@ -47,28 +53,28 @@ class ConfigRuleManager:
                 "Owner": "AWS",
                 "SourceIdentifier": spec.source_identifier,
             },
-            "InputParameters": json.dumps(spec.input_parameters) if spec.input_parameters else "{}",
+            "InputParameters": json.dumps(spec.input_parameters)
+            if spec.input_parameters
+            else "{}",
         }
 
-        # Scope – if the catalog provides resource types, use them
         if spec.resource_types:
-            config_rule["Scope"] = {
-                "ComplianceResourceTypes": spec.resource_types
-            }
+            config_rule["Scope"] = {"ComplianceResourceTypes": spec.resource_types}
 
         try:
             self.client.put_config_rule(ConfigRule=config_rule)
         except ClientError as exc:
             raise RuntimeError(f"PutConfigRule failed for {rule_name}: {exc}") from exc
 
-        # Tag the rule so we can find it later
         try:
             self.client.tag_resource(
                 ResourceArn=self._rule_arn(rule_name),
-                Tags=[{"Key": k, "Value": v} for k, v in standard_tags(self.test_run_id).items()],
+                Tags=[
+                    {"Key": k, "Value": v}
+                    for k, v in standard_tags(self.test_run_id).items()
+                ],
             )
         except ClientError:
-            # Tagging is best-effort; some accounts restrict it
             log(f"Warning: could not tag rule {rule_name}", style="yellow")
 
         return rule_name
@@ -88,24 +94,39 @@ class ConfigRuleManager:
             else:
                 raise
 
+    @retry(
+        retry=retry_if_exception_type(RateLimitedError),
+        stop=stop_after_attempt(8),
+        wait=wait_exponential(multiplier=2, min=5, max=60),
+        reraise=True,
+    )
     def start_evaluation(self, rule_name: str) -> None:
         if is_dry_run():
             log(f"Would StartConfigRulesEvaluation for {rule_name}")
             return
         log(f"Starting on-demand evaluation for {rule_name}")
-        self.client.start_config_rules_evaluation(ConfigRuleNames=[rule_name])
+        try:
+            self.client.start_config_rules_evaluation(ConfigRuleNames=[rule_name])
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code == "LimitExceededException":
+                log(
+                    f"Rate limited on StartConfigRulesEvaluation for {rule_name}; backing off…",
+                    style="yellow",
+                )
+                raise RateLimitedError(str(exc)) from exc
+            raise
 
     @retry(stop=stop_after_attempt(30), wait=wait_exponential(multiplier=1, min=2, max=15))
     def wait_for_evaluation(self, rule_name: str, after_timestamp: float) -> None:
-        """
-        Poll DescribeConfigRuleEvaluationStatus until a successful evaluation
-        newer than *after_timestamp* appears (or dry-run short-circuits).
-        """
+        """Poll until a successful evaluation newer than *after_timestamp*."""
         if is_dry_run():
             log(f"Dry-run – skipping wait for evaluation of {rule_name}")
             return
 
-        resp = self.client.describe_config_rule_evaluation_status(ConfigRuleNames=[rule_name])
+        resp = self.client.describe_config_rule_evaluation_status(
+            ConfigRuleNames=[rule_name]
+        )
         statuses = resp.get("ConfigRulesEvaluationStatus", [])
         if not statuses:
             raise RuntimeError(f"No evaluation status returned for {rule_name}")
@@ -115,9 +136,14 @@ class ConfigRuleManager:
         if last_success is None:
             raise RuntimeError("Evaluation has not completed yet")
 
-        # boto3 returns datetime; convert to epoch for comparison
-        last_epoch = last_success.timestamp() if hasattr(last_success, "timestamp") else float(last_success)
+        last_epoch = (
+            last_success.timestamp()
+            if hasattr(last_success, "timestamp")
+            else float(last_success)
+        )
         if last_epoch < after_timestamp:
-            raise RuntimeError("Evaluation timestamp is still older than the change we made")
+            raise RuntimeError(
+                "Evaluation timestamp is still older than the change we made"
+            )
 
         log(f"Evaluation completed for {rule_name} at {last_success}")
