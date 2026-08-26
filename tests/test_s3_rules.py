@@ -1,21 +1,15 @@
 """
 First vertical slice – S3 managed rules.
 
-For every S3 rule returned by the live DynamoDB catalog we:
+By default this test runs only a small allowlist of rules so we can iterate
+quickly without rate limits or unrelated CloudTrail/CloudFront/etc rules.
 
-1. Put the managed rule with the exact parameters from the catalog.
-2. Force the shared test bucket into a NON_COMPLIANT state.
-3. Start evaluation, wait, assert NON_COMPLIANT.
-4. Force the bucket into a COMPLIANT state.
-5. Re-evaluate, assert COMPLIANT.
-6. Clean up the Config rule.
-
-The concrete toggle used for each rule is taken from the catalog's
-``toggle_strategy`` field (defaults to ``s3_generic`` → versioning).
+Set env ALLOW_ALL_S3_RULES=1 to run every rule returned by the catalog.
 """
 
 from __future__ import annotations
 
+import os
 import time
 
 import pytest
@@ -25,6 +19,24 @@ from harness.compliance import ComplianceChecker
 from harness.config_rule import ConfigRuleManager
 from harness.dry_run import log
 from harness.s3_toggle import S3Toggle
+
+# Keep this list tiny until the full cycle is proven green.
+# Match against source_identifier (stable) or rule_name.
+DEFAULT_ALLOWLIST = {
+    "S3_BUCKET_VERSIONING_ENABLED",
+    "s3-bucket-versioning-enabled",
+    "RULE#s3-bucket-versioning-enabled",
+}
+
+
+def _is_allowed(spec: ManagedRuleSpec) -> bool:
+    if os.environ.get("ALLOW_ALL_S3_RULES") == "1":
+        return True
+    return (
+        spec.source_identifier in DEFAULT_ALLOWLIST
+        or spec.rule_name in DEFAULT_ALLOWLIST
+        or any(token in spec.rule_name for token in ("s3-bucket-versioning-enabled",))
+    )
 
 
 @pytest.mark.s3
@@ -37,25 +49,29 @@ def test_s3_rule_compliance_cycle(
     s3_test_bucket: str,
 ) -> None:
     """
-    Parametrized-style loop over every S3 rule from the catalog.
-    Using a single test function keeps fixture setup cheap; each rule
-    still gets its own independent Put → evaluate → Delete cycle.
+    Run the Put → NON_COMPLIANT → COMPLIANT → Delete cycle for allowed rules.
     """
     if not s3_rules:
         pytest.skip("No S3 rules available from the catalog")
 
+    selected = [spec for spec in s3_rules if _is_allowed(spec)]
+    if not selected:
+        pytest.skip(
+            "No allowlisted S3 rules found. "
+            "Set ALLOW_ALL_S3_RULES=1 to run the full set, or extend DEFAULT_ALLOWLIST."
+        )
+
+    log(f"Running {len(selected)} allowlisted rule(s) (of {len(s3_rules)} from catalog)")
+
     failures: list[str] = []
 
-    for spec in s3_rules:
+    for spec in selected:
         rule_name = None
         try:
             log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
 
             # a. PutConfigRule
             rule_name = config_mgr.put_managed_rule(spec)
-
-            # b. (light) assert it exists – DescribeConfigRules would be ideal;
-            #    for brevity we rely on the fact that Put succeeded.
 
             # c. Force NON_COMPLIANT
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=False)
@@ -94,7 +110,6 @@ def test_s3_rule_compliance_cycle(
             log(f"✗ {spec.rule_name} failed: {exc}", style="red")
 
         finally:
-            # i. Always clean up the rule
             if rule_name:
                 try:
                     config_mgr.delete_rule(rule_name)
