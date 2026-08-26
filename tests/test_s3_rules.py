@@ -21,7 +21,6 @@ from harness.dry_run import log
 from harness.s3_toggle import S3Toggle
 
 # Keep this list tiny until the full cycle is proven green.
-# Match against source_identifier (stable) or rule_name.
 DEFAULT_ALLOWLIST = {
     "S3_BUCKET_VERSIONING_ENABLED",
     "s3-bucket-versioning-enabled",
@@ -48,9 +47,7 @@ def test_s3_rule_compliance_cycle(
     s3_toggle: S3Toggle,
     s3_test_bucket: str,
 ) -> None:
-    """
-    Run the Put → NON_COMPLIANT → COMPLIANT → Delete cycle for allowed rules.
-    """
+    """Run the Put → NON_COMPLIANT → COMPLIANT → Delete cycle for allowed rules."""
     if not s3_rules:
         pytest.skip("No S3 rules available from the catalog")
 
@@ -70,30 +67,24 @@ def test_s3_rule_compliance_cycle(
         try:
             log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
 
-            # a. PutConfigRule
             rule_name = config_mgr.put_managed_rule(spec)
 
-            # c. Force NON_COMPLIANT
+            # NON_COMPLIANT path
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=False)
             change_ts = time.time()
-
-            # d. Start evaluation + poll
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
-
-            # e. Assert NON_COMPLIANT
             compliance.assert_resource_compliance(
                 rule_name=rule_name,
                 resource_id=s3_test_bucket,
                 expected="NON_COMPLIANT",
                 resource_type="AWS::S3::Bucket",
+                config_mgr=config_mgr,
             )
 
-            # f. Force COMPLIANT
+            # COMPLIANT path
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=True)
             change_ts = time.time()
-
-            # g. Re-evaluate + assert COMPLIANT
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
             compliance.assert_resource_compliance(
@@ -101,6 +92,7 @@ def test_s3_rule_compliance_cycle(
                 resource_id=s3_test_bucket,
                 expected="COMPLIANT",
                 resource_type="AWS::S3::Bucket",
+                config_mgr=config_mgr,
             )
 
             log(f"✓ {spec.rule_name} passed full compliance cycle", style="green")
