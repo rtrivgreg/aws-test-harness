@@ -5,11 +5,10 @@ Important: DescribeConfigRuleEvaluationStatus only tells you that an
 evaluation *ran*.  The actual COMPLIANT / NON_COMPLIANT / NOT_APPLICABLE
 outcome lives in GetComplianceDetailsByConfigRule (or ByResource).
 
-Newly created resources are often missing from the first evaluation wave.
-We therefore:
-1. Wait for Config to *discover* the resource (get-resource-config-history)
-   before any rule evaluation.
-2. Poll evaluation results until the target resource ID appears.
+Newly created resources and post-change state both lag in Config. We:
+1. Wait for Config to discover the resource before any rule work.
+2. After each resource mutation, wait for a newer configuration item.
+3. Poll evaluation results until the target resource ID appears.
 """
 
 from __future__ import annotations
@@ -33,14 +32,9 @@ class ComplianceChecker:
         resource_id: str,
         resource_type: str = "AWS::S3::Bucket",
         timeout_seconds: int = 300,
-        poll_seconds: int = 15,
+        poll_seconds: int = 5,
     ) -> None:
-        """
-        Block until AWS Config has at least one configuration item for the resource.
-
-        This must succeed before PutConfigRule / StartConfigRulesEvaluation,
-        otherwise evaluations only cover already-known resources.
-        """
+        """Block until Config has at least one configuration item for the resource."""
         if is_dry_run():
             log(f"Dry-run – skipping Config discovery wait for {resource_id}")
             return
@@ -66,7 +60,6 @@ class ComplianceChecker:
                     return
             except ClientError as exc:
                 code = exc.response.get("Error", {}).get("Code", "")
-                # ResourceNotDiscoveredException is expected until Config catches up
                 if code not in (
                     "ResourceNotDiscoveredException",
                     "NoAvailableConfigurationRecorderException",
@@ -86,12 +79,76 @@ class ComplianceChecker:
             f"{resource_type} {resource_id}. Check the configuration recorder."
         )
 
+    def wait_for_config_item_after(
+        self,
+        resource_id: str,
+        after_timestamp: float,
+        resource_type: str = "AWS::S3::Bucket",
+        timeout_seconds: int = 180,
+        poll_seconds: int = 5,
+    ) -> None:
+        """
+        Wait until Config has a configuration item with capture time >= after_timestamp.
+
+        Call this after mutating the resource (e.g. toggling versioning) so the
+        next evaluation uses the new state instead of a stale CI.
+        """
+        if is_dry_run():
+            log(f"Dry-run – skipping CI freshness wait for {resource_id}")
+            return
+
+        deadline = time.time() + timeout_seconds
+        attempt = 0
+        while time.time() < deadline:
+            attempt += 1
+            try:
+                resp = self.client.get_resource_config_history(
+                    resourceType=resource_type,
+                    resourceId=resource_id,
+                    limit=1,
+                )
+                items = resp.get("configurationItems") or []
+                if items:
+                    captured = items[0].get("configurationItemCaptureTime")
+                    if captured is not None:
+                        captured_epoch = (
+                            captured.timestamp()
+                            if hasattr(captured, "timestamp")
+                            else float(captured)
+                        )
+                        if captured_epoch >= after_timestamp:
+                            log(
+                                f"Config CI for {resource_id} is fresh "
+                                f"(captured={captured}, attempt={attempt})"
+                            )
+                            return
+                        log(
+                            f"Config CI for {resource_id} still stale "
+                            f"(captured={captured}, need >= {after_timestamp:.0f}, "
+                            f"attempt={attempt})"
+                        )
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code", "")
+                if code not in (
+                    "ResourceNotDiscoveredException",
+                    "NoAvailableConfigurationRecorderException",
+                ):
+                    raise RuntimeError(
+                        f"get_resource_config_history failed for {resource_id}: {exc}"
+                    ) from exc
+
+            time.sleep(poll_seconds)
+
+        raise TimeoutError(
+            f"Timed out after {timeout_seconds}s waiting for a fresh Config CI "
+            f"for {resource_type} {resource_id} after {after_timestamp:.0f}"
+        )
+
     def get_results_for_rule(
         self,
         rule_name: str,
         compliance_types: Optional[List[str]] = None,
     ) -> List[dict]:
-        """Return the list of EvaluationResult objects for the given rule."""
         if is_dry_run():
             log(f"Dry-run – returning empty compliance results for {rule_name}")
             return []
@@ -128,7 +185,6 @@ class ComplianceChecker:
         poll_seconds: int = 10,
         config_mgr=None,
     ) -> List[dict]:
-        """Poll until evaluation results include *resource_id*."""
         if is_dry_run():
             return []
 
@@ -174,7 +230,6 @@ class ComplianceChecker:
         config_mgr=None,
         timeout_seconds: int = 180,
     ) -> None:
-        """Assert resource has the expected compliance type under the rule."""
         if is_dry_run():
             log(f"Dry-run – would assert {resource_id} is {expected} under {rule_name}")
             return

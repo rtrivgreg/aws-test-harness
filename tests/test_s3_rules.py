@@ -20,7 +20,6 @@ from harness.config_rule import ConfigRuleManager
 from harness.dry_run import log
 from harness.s3_toggle import S3Toggle
 
-# Keep this list tiny until the full cycle is proven green.
 DEFAULT_ALLOWLIST = {
     "S3_BUCKET_VERSIONING_ENABLED",
     "s3-bucket-versioning-enabled",
@@ -72,6 +71,11 @@ def test_s3_rule_compliance_cycle(
             # NON_COMPLIANT path
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=False)
             change_ts = time.time()
+            compliance.wait_for_config_item_after(
+                resource_id=s3_test_bucket,
+                after_timestamp=change_ts,
+                resource_type="AWS::S3::Bucket",
+            )
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
             compliance.assert_resource_compliance(
@@ -85,6 +89,11 @@ def test_s3_rule_compliance_cycle(
             # COMPLIANT path
             s3_toggle.apply_strategy(spec.toggle_strategy, compliant=True)
             change_ts = time.time()
+            compliance.wait_for_config_item_after(
+                resource_id=s3_test_bucket,
+                after_timestamp=change_ts,
+                resource_type="AWS::S3::Bucket",
+            )
             config_mgr.start_evaluation(rule_name)
             config_mgr.wait_for_evaluation(rule_name, after_timestamp=change_ts)
             compliance.assert_resource_compliance(
