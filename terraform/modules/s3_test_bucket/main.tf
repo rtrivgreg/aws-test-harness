@@ -15,7 +15,7 @@ resource "random_id" "suffix" {
 }
 
 locals {
-  bucket_name = "cfg-test-${var.test_run_id}-${random_id.suffix.hex}"
+  bucket_name = lower("cfg-test-${var.test_run_id}-${random_id.suffix.hex}")
 }
 
 resource "aws_s3_bucket" "test" {
