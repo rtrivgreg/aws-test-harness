@@ -6,8 +6,10 @@ evaluation *ran*.  The actual COMPLIANT / NON_COMPLIANT / NOT_APPLICABLE
 outcome lives in GetComplianceDetailsByConfigRule (or ByResource).
 
 Newly created resources are often missing from the first evaluation wave.
-assert_resource_compliance therefore polls until the target resource ID
-appears (or times out).
+We therefore:
+1. Wait for Config to *discover* the resource (get-resource-config-history)
+   before any rule evaluation.
+2. Poll evaluation results until the target resource ID appears.
 """
 
 from __future__ import annotations
@@ -25,6 +27,64 @@ class ComplianceChecker:
     def __init__(self, region: Optional[str] = None):
         self.region = region or "us-east-1"
         self.client = boto3.client("config", region_name=self.region)
+
+    def wait_for_resource_discovered(
+        self,
+        resource_id: str,
+        resource_type: str = "AWS::S3::Bucket",
+        timeout_seconds: int = 300,
+        poll_seconds: int = 15,
+    ) -> None:
+        """
+        Block until AWS Config has at least one configuration item for the resource.
+
+        This must succeed before PutConfigRule / StartConfigRulesEvaluation,
+        otherwise evaluations only cover already-known resources.
+        """
+        if is_dry_run():
+            log(f"Dry-run – skipping Config discovery wait for {resource_id}")
+            return
+
+        deadline = time.time() + timeout_seconds
+        attempt = 0
+        while time.time() < deadline:
+            attempt += 1
+            try:
+                resp = self.client.get_resource_config_history(
+                    resourceType=resource_type,
+                    resourceId=resource_id,
+                    limit=1,
+                )
+                items = resp.get("configurationItems") or []
+                if items:
+                    status = items[0].get("configurationItemStatus", "?")
+                    captured = items[0].get("configurationItemCaptureTime", "?")
+                    log(
+                        f"Config discovered {resource_id} "
+                        f"(status={status}, captured={captured}, attempt={attempt})"
+                    )
+                    return
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code", "")
+                # ResourceNotDiscoveredException is expected until Config catches up
+                if code not in (
+                    "ResourceNotDiscoveredException",
+                    "NoAvailableConfigurationRecorderException",
+                ):
+                    raise RuntimeError(
+                        f"get_resource_config_history failed for {resource_id}: {exc}"
+                    ) from exc
+
+            log(
+                f"Waiting for Config to discover {resource_id} "
+                f"(attempt {attempt}, up to {timeout_seconds}s)"
+            )
+            time.sleep(poll_seconds)
+
+        raise TimeoutError(
+            f"Timed out after {timeout_seconds}s waiting for Config to discover "
+            f"{resource_type} {resource_id}. Check the configuration recorder."
+        )
 
     def get_results_for_rule(
         self,
@@ -68,12 +128,7 @@ class ComplianceChecker:
         poll_seconds: int = 10,
         config_mgr=None,
     ) -> List[dict]:
-        """
-        Poll until evaluation results include *resource_id*.
-
-        Optionally re-triggers StartConfigRulesEvaluation via config_mgr
-        every other poll to give Config another chance to pick up a new resource.
-        """
+        """Poll until evaluation results include *resource_id*."""
         if is_dry_run():
             return []
 
@@ -97,8 +152,7 @@ class ComplianceChecker:
                 f"(attempt {attempt}; {len(last_results)} other result(s) so far)"
             )
 
-            # Periodically nudge another evaluation in case the first wave missed the new bucket
-            if config_mgr is not None and attempt % 2 == 0:
+            if config_mgr is not None and attempt % 3 == 0:
                 try:
                     config_mgr.start_evaluation(rule_name)
                 except Exception as exc:
@@ -120,12 +174,7 @@ class ComplianceChecker:
         config_mgr=None,
         timeout_seconds: int = 180,
     ) -> None:
-        """
-        Assert that the given resource has the expected compliance type
-        under the given rule.
-
-        expected should be one of: COMPLIANT, NON_COMPLIANT, NOT_APPLICABLE
-        """
+        """Assert resource has the expected compliance type under the rule."""
         if is_dry_run():
             log(f"Dry-run – would assert {resource_id} is {expected} under {rule_name}")
             return

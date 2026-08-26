@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import time
 from pathlib import Path
 from typing import Generator
 
@@ -25,9 +24,6 @@ from harness.s3_toggle import S3Toggle
 from harness.tags import get_test_run_id
 
 
-# ---------------------------------------------------------------------------
-# Command-line options
-# ---------------------------------------------------------------------------
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--dry-run",
@@ -74,27 +70,23 @@ def aws_region() -> str:
     return os.environ.get("AWS_REGION", "us-east-1")
 
 
-# ---------------------------------------------------------------------------
-# Terraform-provisioned S3 bucket
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
-def s3_test_bucket(test_run_id: str, aws_region: str, request: pytest.FixtureRequest) -> Generator[str, None, None]:
+def s3_test_bucket(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[str, None, None]:
     """
-    Ensure the minimal S3 test bucket exists (via Terraform) and yield its name.
-    The bucket is left in place after the run so it can be inspected; destroy
-    it explicitly with `terraform destroy` when finished.
+    Ensure the minimal S3 test bucket exists (via Terraform), wait until AWS
+    Config has discovered it, then yield its name.
     """
     tf_dir = Path(request.config.getoption("--terraform-dir"))
     if not tf_dir.exists():
         pytest.skip(f"Terraform directory {tf_dir} not found")
 
-    # Apply (or refresh) the S3 module
     log("Running terraform apply for S3 test bucket …")
     env = os.environ.copy()
     env["TF_VAR_test_run_id"] = test_run_id
     env["TF_VAR_aws_region"] = aws_region
 
-    # We use -auto-approve for CI friendliness; users can still run plan manually
     result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         cwd=tf_dir,
@@ -106,7 +98,6 @@ def s3_test_bucket(test_run_id: str, aws_region: str, request: pytest.FixtureReq
         log(result.stderr, style="red")
         pytest.fail(f"terraform apply failed: {result.stderr}")
 
-    # Read the output
     out = subprocess.run(
         ["terraform", "output", "-json"],
         cwd=tf_dir,
@@ -121,13 +112,19 @@ def s3_test_bucket(test_run_id: str, aws_region: str, request: pytest.FixtureReq
         pytest.fail("terraform output s3_test_bucket_name is empty")
 
     log(f"S3 test bucket ready: {bucket_name}")
+
+    # Critical: do not evaluate rules until Config has a configuration item
+    checker = ComplianceChecker(region=aws_region)
+    checker.wait_for_resource_discovered(
+        resource_id=bucket_name,
+        resource_type="AWS::S3::Bucket",
+        timeout_seconds=300,
+        poll_seconds=15,
+    )
+
     yield bucket_name
-    # Intentionally no destroy here – leave the resource for inspection / reuse
 
 
-# ---------------------------------------------------------------------------
-# Catalog + managers
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def catalog() -> CatalogClient:
     return CatalogClient()
