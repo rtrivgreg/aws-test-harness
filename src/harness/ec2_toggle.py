@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 import boto3
@@ -15,6 +16,16 @@ class Ec2Toggle:
         self.region = region or "us-east-1"
         self.ec2 = boto3.client("ec2", region_name=self.region)
 
+    def _nudge(self, reason: str) -> None:
+        log(f"Nudging Config via EC2 tag ({reason}) on {self.instance_id}")
+        self.ec2.create_tags(
+            Resources=[self.instance_id],
+            Tags=[
+                {"Key": "harness-toggle-ts", "Value": str(int(time.time()))},
+                {"Key": "harness-last-toggle", "Value": reason[:128]},
+            ],
+        )
+
     @dry_run_guard("Modify instance metadata options")
     def set_imdsv2_required(self, required: bool) -> None:
         tokens = "required" if required else "optional"
@@ -24,3 +35,4 @@ class Ec2Toggle:
             HttpTokens=tokens,
             HttpEndpoint="enabled",
         )
+        self._nudge(f"imds-{tokens}")
