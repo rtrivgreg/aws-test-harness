@@ -27,11 +27,19 @@ variable "enable_fsx_test" {
   type    = bool
   default = false
 }
+variable "enable_ec2_test" {
+  type    = bool
+  default = false
+}
 variable "ebs_subnet_id" {
   type    = string
   default = ""
 }
 variable "fsx_subnet_id" {
+  type    = string
+  default = ""
+}
+variable "ec2_subnet_id" {
   type    = string
   default = ""
 }

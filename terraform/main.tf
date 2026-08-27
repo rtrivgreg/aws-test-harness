@@ -42,3 +42,11 @@ module "fsx_openzfs_test" {
   tags        = local.common_tags
   subnet_id   = var.fsx_subnet_id
 }
+
+module "ec2_test_instance" {
+  source      = "./modules/ec2_test_instance"
+  count       = var.enable_ec2_test ? 1 : 0
+  test_run_id = var.test_run_id
+  tags        = local.common_tags
+  subnet_id   = var.ec2_subnet_id
+}

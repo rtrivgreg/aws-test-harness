@@ -14,3 +14,4 @@ output "cloudtrail_name" { value = try(module.cloudtrail_test[0].trail_name, nul
 output "cloudtrail_arn" { value = try(module.cloudtrail_test[0].trail_arn, null) }
 output "cloudtrail_log_bucket" { value = try(module.cloudtrail_test[0].log_bucket, null) }
 output "fsx_file_system_id" { value = try(module.fsx_openzfs_test[0].file_system_id, null) }
+output "ec2_instance_id" { value = try(module.ec2_test_instance[0].instance_id, null) }
