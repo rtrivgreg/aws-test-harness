@@ -1,4 +1,8 @@
 # AWS Config Rule Test Harness
+8/27/2026 ACT II
+1) email aliases: awzr-rtrivgreg@yahoo.com
+2) harness
+3) make 3 cps. Test val change via amplify
 
 Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
 
