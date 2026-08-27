@@ -1,11 +1,12 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 17:38 EDT
+Last updated: 2026-08-27 17:45 EDT
 
 ## Locked live proofs
 
 **S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
-SSL-requests-only, logging-enabled, **public-read-prohibited** PASSED 17:38 EDT.
+SSL-requests-only, logging-enabled, public-read-prohibited,
+**public-write-prohibited** PASSED 17:45 EDT.
 
 **EBS** — `ENCRYPTED_VOLUMES`. Snapshot public-restorable partial only.
 
@@ -23,7 +24,4 @@ SSL-requests-only, logging-enabled, **public-read-prohibited** PASSED 17:38 EDT.
 **FSx OpenZFS** — Config never discovered the filesystem.
 **S3 default encryption** — skip.
 
-## Next optional
-
-`S3_BUCKET_PUBLIC_WRITE_PROHIBITED` (same BPA + policy pattern, PutObject).
-Then destroy + stop recorder.
+Destroy test resources and stop the recorder when you quit.
