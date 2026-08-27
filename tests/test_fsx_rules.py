@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Generator
 
 import pytest
 
@@ -20,6 +21,43 @@ def _spec() -> ManagedRuleSpec:
         resource_types=["AWS::FSx::FileSystem"],
         toggle_strategy="fsx_copy_tags",
     )
+
+
+@pytest.fixture(scope="session")
+def fsx_filesystem(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[dict, None, None]:
+    from pathlib import Path
+    import os
+    import json
+    import subprocess
+
+    tf_dir = Path(request.config.getoption("--terraform-dir"))
+    env = os.environ.copy()
+    env["TF_VAR_test_run_id"] = test_run_id
+    env["TF_VAR_aws_region"] = aws_region
+    env["TF_VAR_enable_fsx_test"] = "true"
+    log("Running terraform apply for FSx OpenZFS ...")
+    subprocess.run(["terraform", "init", "-input=false"], cwd=tf_dir, env=env, check=False)
+    result = subprocess.run(
+        ["terraform", "apply", "-auto-approve", "-input=false"],
+        cwd=tf_dir, env=env, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        pytest.fail(f"terraform apply failed: {result.stderr}")
+    out = subprocess.run(
+        ["terraform", "output", "-json"],
+        cwd=tf_dir, env=env, capture_output=True, text=True, check=True,
+    )
+    outputs = json.loads(out.stdout)
+    fs_id = outputs.get("fsx_file_system_id", {}).get("value")
+    if not fs_id:
+        pytest.fail("terraform fsx_file_system_id is empty")
+    log(f"FSx file system ready: {fs_id}")
+    ComplianceChecker(region=aws_region).wait_for_resource_discovered(
+        fs_id, "AWS::FSx::FileSystem", timeout_seconds=600, poll_seconds=10
+    )
+    yield {"file_system_id": fs_id}
 
 
 @pytest.mark.fsx
