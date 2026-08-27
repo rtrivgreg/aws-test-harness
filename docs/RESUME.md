@@ -1,6 +1,6 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 16:17 EDT
+Last updated: 2026-08-27 16:39 EDT
 
 ## Locked live proofs
 
@@ -10,22 +10,21 @@ Last updated: 2026-08-27 16:17 EDT
 
 **EFS** — encrypted, automatic backups, access points.
 
-**CloudTrail** — log-file validation this host. KMS encryption on the other machine.
+**CloudTrail** — log-file validation this host. KMS on the other machine.
 
-**EC2** — IMDSv2, restricted SSH. Proven.
+**EC2** — IMDSv2, restricted SSH.
 
-**Backup** — `test_backup_rules.py` min frequency/retention. PASSED 16:17 EDT.
+**Backup** — min frequency/retention. PASSED 16:17 EDT.
 
-## Gaps
+## Parked
 
-**restricted-common-ports / RESTRICTED_INCOMING_TRAFFIC** — implemented; live eval returned empty results for 600s. Parked.
+**restricted-common-ports** — empty evaluation results.
 
-**S3 encryption** — default AES256; skip.
+**FSx OpenZFS copy-tags** — filesystem created (`fs-0cd37985bac7d2362`) but Config
+`ResourceNotDiscoveredException` for `AWS::FSx::FileSystem`. Do not keep the FS.
 
-**CloudTrail KMS** — skip on this host (ARN on the other machine).
+**S3 default encryption** — skip.
 
-**FSx** — deferred (cost / time).
+## Hygiene
 
-## Next
-
-FSx only if you want it. Otherwise destroy Terraform and stop the recorder.
+Destroy Terraform (especially FSx). Stop the recorder when idle.
