@@ -1,25 +1,24 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 15:23 EDT
+Last updated: 2026-08-27 15:31 EDT
 
 ## Locked live proofs
 
-**S3 full cycle** — versioning, lifecycle, version-lifecycle, public-access prohibited.
+**S3** — versioning, lifecycle, version-lifecycle, public-access prohibited.
 
-**EBS** — `ENCRYPTED_VOLUMES` proven. Snapshot public-restorable partial only.
+**EBS** — `ENCRYPTED_VOLUMES`. Snapshot public-restorable partial only.
 
-**EFS** — encrypted, automatic backups, access-point rules. Proven 2026-08-27.
+**EFS** — encrypted, automatic backups, access points.
 
-**CloudTrail** — log-file validation PASSED this host. KMS encryption test SKIPPED here
-(`CLOUDTRAIL_KMS_KEY_ARN` unset). User reports that slice was done on the other machine.
+**CloudTrail** — log-file validation this host. KMS encryption done on the other machine.
 
-**S3 skip:** default bucket encryption.
+**EC2** — IMDSv2 (`test_ec2_rules.py`) PASSED 15:31 EDT.
 
 ## Next
 
 ```bash
 git pull
-pytest tests/test_ec2_rules.py -v -s
+pytest tests/test_ec2_ssh_rules.py -v -s
 ```
 
-IMDSv2. Then SSH / ports if that passes. Defer FSx.
+Then `tests/test_ec2_ports_rules.py`. Defer FSx.
