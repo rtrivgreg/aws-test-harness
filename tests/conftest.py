@@ -146,7 +146,6 @@ def efs_filesystems(
     ap_c = outputs.get("efs_access_point_c_id", {}).get("value")
     if not unenc or not enc:
         pytest.fail("terraform EFS outputs are empty")
-    log(f"EFS unenc={unenc} enc={enc} ap_nc={ap_nc} ap_c={ap_c}")
     checker = ComplianceChecker(region=aws_region)
     checker.wait_for_resource_discovered(unenc, "AWS::EFS::FileSystem")
     checker.wait_for_resource_discovered(enc, "AWS::EFS::FileSystem")
@@ -160,6 +159,28 @@ def efs_filesystems(
         "access_point_nc_id": ap_nc,
         "access_point_c_id": ap_c,
     }
+
+
+@pytest.fixture(scope="session")
+def cloudtrail_trail(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[dict, None, None]:
+    tf_dir = Path(request.config.getoption("--terraform-dir"))
+    env = os.environ.copy()
+    env["TF_VAR_test_run_id"] = test_run_id
+    env["TF_VAR_aws_region"] = aws_region
+    env["TF_VAR_enable_cloudtrail_test"] = "true"
+    log("Running terraform apply for CloudTrail test trail ...")
+    outputs = _terraform_apply(tf_dir, env)
+    name = outputs.get("cloudtrail_name", {}).get("value")
+    arn = outputs.get("cloudtrail_arn", {}).get("value")
+    if not name:
+        pytest.fail("terraform cloudtrail_name output is empty")
+    log(f"CloudTrail ready: {name}")
+    ComplianceChecker(region=aws_region).wait_for_resource_discovered(
+        name, "AWS::CloudTrail::Trail"
+    )
+    yield {"trail_name": name, "trail_arn": arn}
 
 
 @pytest.fixture(scope="session")
