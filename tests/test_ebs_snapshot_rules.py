@@ -27,6 +27,13 @@ def _spec() -> ManagedRuleSpec:
     )
 
 
+def _annotation(results: list[dict]) -> str:
+    for r in results:
+        if r.get("Annotation"):
+            return str(r["Annotation"])
+    return ""
+
+
 def _any_result_of_type(results: list[dict], expected: str) -> bool:
     return any(r.get("ComplianceType") == expected for r in results)
 
@@ -57,11 +64,17 @@ def test_ebs_snapshot_public_restorable(
         results = compliance.get_results_for_rule(rule_name)
         if not _any_result_of_type(results, "NON_COMPLIANT"):
             raise AssertionError(
-                f"Expected NON_COMPLIANT after public snapshot; results={results}"
+                f"Expected NON_COMPLIANT after public snapshot; "
+                f"annotation={_annotation(results)} results={results}"
             )
-        log("\u2713 public snapshot produced NON_COMPLIANT", style="green")
+        log(
+            f"public snapshot produced NON_COMPLIANT ({_annotation(results)})",
+            style="green",
+        )
 
         toggle.make_snapshot_private()
+        # Periodic rules can still see the old public count for a short window.
+        time.sleep(15)
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
         config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
@@ -69,10 +82,12 @@ def test_ebs_snapshot_public_restorable(
         if _any_result_of_type(results, "NON_COMPLIANT"):
             raise AssertionError(
                 "Still NON_COMPLIANT after making harness snapshot private. "
-                "Another public snapshot in this account may exist. "
-                f"results={results}"
+                f"EC2 says public={toggle.is_public()}. "
+                f"annotation={_annotation(results)}. "
+                "If annotation count stays at 1, another snapshot in the account "
+                "is public, or Config has not refreshed snapshot permissions yet."
             )
-        log("\u2713 private snapshot produced no NON_COMPLIANT", style="green")
+        log("private snapshot produced no NON_COMPLIANT", style="green")
     finally:
         try:
             toggle.make_snapshot_private()
