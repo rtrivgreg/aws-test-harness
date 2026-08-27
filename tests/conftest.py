@@ -1,9 +1,5 @@
 """
 pytest fixtures for the AWS Config rule test harness.
-
-Session-scoped fixtures keep the expensive Terraform resource alive for
-the whole test run.  Function-scoped fixtures give each test a clean
-Config rule lifecycle.
 """
 
 from __future__ import annotations
@@ -70,23 +66,7 @@ def aws_region() -> str:
     return os.environ.get("AWS_REGION", "us-east-1")
 
 
-@pytest.fixture(scope="session")
-def s3_test_bucket(
-    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
-) -> Generator[str, None, None]:
-    """
-    Ensure the minimal S3 test bucket exists (via Terraform), wait until AWS
-    Config has discovered it, then yield its name.
-    """
-    tf_dir = Path(request.config.getoption("--terraform-dir"))
-    if not tf_dir.exists():
-        pytest.skip(f"Terraform directory {tf_dir} not found")
-
-    log("Running terraform apply for S3 test bucket …")
-    env = os.environ.copy()
-    env["TF_VAR_test_run_id"] = test_run_id
-    env["TF_VAR_aws_region"] = aws_region
-
+def _terraform_apply(tf_dir: Path, env: dict) -> dict:
     result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         cwd=tf_dir,
@@ -97,7 +77,6 @@ def s3_test_bucket(
     if result.returncode != 0:
         log(result.stderr, style="red")
         pytest.fail(f"terraform apply failed: {result.stderr}")
-
     out = subprocess.run(
         ["terraform", "output", "-json"],
         cwd=tf_dir,
@@ -106,14 +85,27 @@ def s3_test_bucket(
         text=True,
         check=True,
     )
-    outputs = json.loads(out.stdout)
+    return json.loads(out.stdout)
+
+
+@pytest.fixture(scope="session")
+def s3_test_bucket(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[str, None, None]:
+    tf_dir = Path(request.config.getoption("--terraform-dir"))
+    if not tf_dir.exists():
+        pytest.skip(f"Terraform directory {tf_dir} not found")
+
+    log("Running terraform apply for S3 test bucket …")
+    env = os.environ.copy()
+    env["TF_VAR_test_run_id"] = test_run_id
+    env["TF_VAR_aws_region"] = aws_region
+    outputs = _terraform_apply(tf_dir, env)
     bucket_name = outputs.get("s3_test_bucket_name", {}).get("value")
     if not bucket_name:
         pytest.fail("terraform output s3_test_bucket_name is empty")
 
     log(f"S3 test bucket ready: {bucket_name}")
-
-    # Critical: do not evaluate rules until Config has a configuration item
     checker = ComplianceChecker(region=aws_region)
     checker.wait_for_resource_discovered(
         resource_id=bucket_name,
@@ -121,8 +113,43 @@ def s3_test_bucket(
         timeout_seconds=300,
         poll_seconds=5,
     )
-
     yield bucket_name
+
+
+@pytest.fixture(scope="session")
+def ebs_volumes(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[dict, None, None]:
+    tf_dir = Path(request.config.getoption("--terraform-dir"))
+    if not tf_dir.exists():
+        pytest.skip(f"Terraform directory {tf_dir} not found")
+
+    log("Running terraform apply for EBS test volumes …")
+    env = os.environ.copy()
+    env["TF_VAR_test_run_id"] = test_run_id
+    env["TF_VAR_aws_region"] = aws_region
+    env["TF_VAR_enable_ebs_test_volumes"] = "true"
+    outputs = _terraform_apply(tf_dir, env)
+
+    unenc = outputs.get("ebs_unencrypted_volume_id", {}).get("value")
+    enc = outputs.get("ebs_encrypted_volume_id", {}).get("value")
+    inst = outputs.get("ebs_instance_id", {}).get("value")
+    if not unenc or not enc:
+        pytest.fail("terraform EBS volume outputs are empty – check apply logs")
+
+    log(f"EBS instance={inst} unenc={unenc} enc={enc}")
+    checker = ComplianceChecker(region=aws_region)
+    checker.wait_for_resource_discovered(
+        resource_id=unenc, resource_type="AWS::EC2::Volume", poll_seconds=5
+    )
+    checker.wait_for_resource_discovered(
+        resource_id=enc, resource_type="AWS::EC2::Volume", poll_seconds=5
+    )
+    yield {
+        "instance_id": inst,
+        "unencrypted_volume_id": unenc,
+        "encrypted_volume_id": enc,
+    }
 
 
 @pytest.fixture(scope="session")
@@ -132,12 +159,10 @@ def catalog() -> CatalogClient:
 
 @pytest.fixture(scope="session")
 def s3_rules(catalog: CatalogClient) -> list[ManagedRuleSpec]:
-    """All S3-related rules from the live DynamoDB catalog."""
     rules = catalog.list_rules_for_group(family="s3")
     if not rules:
         log(
-            "No S3 rules returned from catalog – tests will be skipped. "
-            "Check CATALOG_TABLE_NAME / CATALOG_GROUP and the scan filter.",
+            "No S3 rules returned from catalog – tests will be skipped.",
             style="yellow",
         )
     return rules
