@@ -1,11 +1,11 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 17:00 EDT
+Last updated: 2026-08-27 17:05 EDT
 
 ## Locked live proofs
 
 **S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
-`s3-bucket-ssl-requests-only` PASSED 17:00 EDT.
+SSL-requests-only, logging-enabled. Proven.
 
 **EBS** — `ENCRYPTED_VOLUMES`. Snapshot public-restorable partial only.
 
@@ -19,12 +19,12 @@ Last updated: 2026-08-27 17:00 EDT
 
 ## Parked
 
-**restricted-common-ports** — empty evaluation results.
-**FSx OpenZFS** — Config never discovered `AWS::FSx::FileSystem`.
+**restricted-common-ports** — empty evaluations.
+**FSx OpenZFS** — Config never discovered the filesystem.
 **S3 default encryption** — skip.
 
-## Next
+## Extra hour
 
-```bash
-pytest tests/test_s3_logging_rules.py -v -s
-```
+S3 SSL + logging locked. Remaining cheap implemented tests are done.
+Optional regression: `pytest tests/test_s3_rules.py -v -s`
+Then destroy + stop recorder.
