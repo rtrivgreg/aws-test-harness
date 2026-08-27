@@ -65,30 +65,6 @@ def backup_plan(
     yield {"plan_id": plan_id, "vault_name": vault}
 
 
-def _eval_type(
-    compliance: ComplianceChecker,
-    config_mgr: ConfigRuleManager,
-    rule_name: str,
-    resource_id: str,
-    after_ts: float,
-) -> str:
-    result = compliance.get_result_for_resource(
-        rule_name=rule_name,
-        resource_id=resource_id,
-        resource_type="AWS::Backup::BackupPlan",
-        config_mgr=config_mgr,
-        after_timestamp=after_ts,
-    )
-    assert result is not None, (
-        f"No evaluation result for {resource_id} under {rule_name}"
-    )
-    ctype = result.get("ComplianceType")
-    assert ctype in {"COMPLIANT", "NON_COMPLIANT", "NOT_APPLICABLE", "INSUFFICIENT_DATA"}, (
-        f"Unexpected ComplianceType {ctype!r}"
-    )
-    return ctype
-
-
 @pytest.mark.backup
 @pytest.mark.slow
 def test_backup_plan_min_retention(
@@ -99,13 +75,14 @@ def test_backup_plan_min_retention(
 ) -> None:
     plan_id = backup_plan["plan_id"]
     vault = backup_plan["vault_name"]
-    assert plan_id.startswith("")  # plan ids are opaque; non-empty already checked
     assert vault.startswith("cfg-backup-vault-"), vault
 
     toggle = BackupToggle(plan_id=plan_id, vault_name=vault, region=aws_region)
     spec = _spec()
     assert spec.source_identifier == "BACKUP_PLAN_MIN_FREQUENCY_AND_MIN_RETENTION_CHECK"
     assert spec.input_parameters["requiredRetentionDays"] == "35"
+    assert spec.input_parameters["requiredFrequencyValue"] == "1"
+    assert spec.input_parameters["requiredFrequencyUnit"] == "days"
 
     rule_name = None
     try:
@@ -114,7 +91,6 @@ def test_backup_plan_min_retention(
         assert rule_name, "PutConfigRule did not return a rule name"
         assert "backup-plan-min-frequency" in rule_name
 
-        # --- NON_COMPLIANT: retention 7 < required 35 ---
         toggle.set_retention_days(7)
         change_ts = time.time()
         compliance.wait_for_config_item_after(
@@ -125,13 +101,17 @@ def test_backup_plan_min_retention(
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
         config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
-        actual_nc = _eval_type(compliance, config_mgr, rule_name, plan_id, eval_ts)
-        assert actual_nc == "NON_COMPLIANT", (
-            f"Expected NON_COMPLIANT with 7-day retention vs required 35; got {actual_nc}"
+        nc_hits = compliance.wait_for_resource_result(
+            rule_name=rule_name,
+            resource_id=plan_id,
+            expected="NON_COMPLIANT",
+            config_mgr=config_mgr,
+            after_timestamp=eval_ts,
         )
+        assert nc_hits, "No NON_COMPLIANT evaluation for the 7-day plan"
+        assert nc_hits[0]["ComplianceType"] == "NON_COMPLIANT"
         log(f"{plan_id} is NON_COMPLIANT under {rule_name}", style="green")
 
-        # --- COMPLIANT: retention 35 meets required 35 ---
         toggle.set_retention_days(35)
         change_ts = time.time()
         compliance.wait_for_config_item_after(
@@ -142,10 +122,15 @@ def test_backup_plan_min_retention(
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
         config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
-        actual_c = _eval_type(compliance, config_mgr, rule_name, plan_id, eval_ts)
-        assert actual_c == "COMPLIANT", (
-            f"Expected COMPLIANT with 35-day retention vs required 35; got {actual_c}"
+        c_hits = compliance.wait_for_resource_result(
+            rule_name=rule_name,
+            resource_id=plan_id,
+            expected="COMPLIANT",
+            config_mgr=config_mgr,
+            after_timestamp=eval_ts,
         )
+        assert c_hits, "No COMPLIANT evaluation for the 35-day plan"
+        assert c_hits[0]["ComplianceType"] == "COMPLIANT"
         log(f"{plan_id} is COMPLIANT under {rule_name}", style="green")
         log(f"{spec.rule_name} passed retention cycle", style="green")
     finally:
