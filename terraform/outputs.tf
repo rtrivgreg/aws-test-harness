@@ -16,6 +16,7 @@ output "cloudtrail_arn" { value = try(module.cloudtrail_test[0].trail_arn, null)
 output "cloudtrail_log_bucket" { value = try(module.cloudtrail_test[0].log_bucket, null) }
 output "fsx_file_system_id" { value = try(module.fsx_openzfs_test[0].file_system_id, null) }
 output "ec2_instance_id" { value = try(module.ec2_test_instance[0].instance_id, null) }
+output "ec2_security_group_id" { value = try(module.ec2_test_instance[0].security_group_id, null) }
 output "backup_plan_id" { value = try(module.backup_test[0].plan_id, null) }
 output "backup_plan_name" { value = try(module.backup_test[0].plan_name, null) }
 output "backup_vault_name" { value = try(module.backup_test[0].vault_name, null) }
