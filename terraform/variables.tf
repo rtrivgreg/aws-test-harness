@@ -27,6 +27,11 @@ variable "enable_efs_test_filesystems" {
   default = false
 }
 
+variable "enable_cloudtrail_test" {
+  type    = bool
+  default = false
+}
+
 variable "ebs_subnet_id" {
   type    = string
   default = ""
