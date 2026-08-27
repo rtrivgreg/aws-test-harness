@@ -26,6 +26,7 @@ markers = [
     "ebs: EBS managed rules",
     "efs: EFS managed rules",
     "cloudtrail: CloudTrail managed rules",
+    "fsx: FSx managed rules",
     "slow: full evaluation cycles",
     "dry_run: print-only",
 ]
