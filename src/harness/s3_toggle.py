@@ -1,10 +1,5 @@
 """
 S3 state toggles.
-
-The harness keeps a single test bucket and flips the attributes that
-common S3 managed rules inspect. After each toggle we also update a
-harness-owned tag so AWS Config is more likely to emit a fresh
-configuration item promptly.
 """
 
 from __future__ import annotations
@@ -79,9 +74,7 @@ class S3Toggle:
         log(f"Setting object ownership={setting} on {self.bucket_name}")
         self.s3.put_bucket_ownership_controls(
             Bucket=self.bucket_name,
-            OwnershipControls={
-                "Rules": [{"ObjectOwnership": setting}],
-            },
+            OwnershipControls={"Rules": [{"ObjectOwnership": setting}]},
         )
 
     @dry_run_guard("Enable S3 versioning")
@@ -108,14 +101,12 @@ class S3Toggle:
         self.s3.put_bucket_lifecycle_configuration(
             Bucket=self.bucket_name,
             LifecycleConfiguration={
-                "Rules": [
-                    {
-                        "ID": "harness-lifecycle",
-                        "Status": "Enabled",
-                        "Filter": {"Prefix": ""},
-                        "Expiration": {"Days": 365},
-                    }
-                ]
+                "Rules": [{
+                    "ID": "harness-lifecycle",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": ""},
+                    "Expiration": {"Days": 365},
+                }]
             },
         )
         self._nudge_config_recording("lifecycle-enabled")
@@ -175,8 +166,7 @@ class S3Toggle:
         self.make_public_access_noncompliant()
         log(f"Putting public GetObject policy on {self.bucket_name}")
         self.s3.put_bucket_policy(
-            Bucket=self.bucket_name,
-            Policy=self._public_read_policy(),
+            Bucket=self.bucket_name, Policy=self._public_read_policy()
         )
         self._nudge_config_recording("public-read-policy")
 
@@ -192,8 +182,7 @@ class S3Toggle:
         self.make_public_access_noncompliant()
         log(f"Putting public PutObject policy on {self.bucket_name}")
         self.s3.put_bucket_policy(
-            Bucket=self.bucket_name,
-            Policy=self._public_write_policy(),
+            Bucket=self.bucket_name, Policy=self._public_write_policy()
         )
         self._nudge_config_recording("public-write-policy")
 
@@ -204,14 +193,24 @@ class S3Toggle:
         self.make_public_access_compliant()
         self._nudge_config_recording("public-write-removed")
 
-    @dry_run_guard("Enable ACLs via BucketOwnerPreferred")
+    @dry_run_guard("Enable ACLs and grant public-read")
     def make_acl_noncompliant(self) -> None:
+        # Ownership change alone stays COMPLIANT. The rule wants user ACL grants.
+        self.make_public_access_noncompliant()
         self._set_ownership("BucketOwnerPreferred")
-        self._nudge_config_recording("acls-enabled")
+        log(f"Putting canned public-read ACL on {self.bucket_name}")
+        self.s3.put_bucket_acl(Bucket=self.bucket_name, ACL="public-read")
+        self._nudge_config_recording("acl-public-read")
 
-    @dry_run_guard("Disable ACLs via BucketOwnerEnforced")
+    @dry_run_guard("Private ACL + BucketOwnerEnforced")
     def make_acl_compliant(self) -> None:
+        try:
+            self._set_ownership("BucketOwnerPreferred")
+            self.s3.put_bucket_acl(Bucket=self.bucket_name, ACL="private")
+        except ClientError as exc:
+            log(f"private ACL (ignored): {exc}", style="yellow")
         self._set_ownership("BucketOwnerEnforced")
+        self.make_public_access_compliant()
         self._nudge_config_recording("acls-disabled")
 
     @dry_run_guard("Enable S3 SSE-S3")
@@ -220,13 +219,9 @@ class S3Toggle:
         self.s3.put_bucket_encryption(
             Bucket=self.bucket_name,
             ServerSideEncryptionConfiguration={
-                "Rules": [
-                    {
-                        "ApplyServerSideEncryptionByDefault": {
-                            "SSEAlgorithm": "AES256"
-                        }
-                    }
-                ]
+                "Rules": [{
+                    "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
+                }]
             },
         )
         self._nudge_config_recording("encryption-enabled")
@@ -246,14 +241,10 @@ class S3Toggle:
     def apply_strategy(self, strategy: str, compliant: bool) -> None:
         mapping = {
             "s3_versioning": (
-                self.make_versioning_compliant
-                if compliant
-                else self.make_versioning_noncompliant
+                self.make_versioning_compliant if compliant else self.make_versioning_noncompliant
             ),
             "s3_lifecycle": (
-                self.make_lifecycle_compliant
-                if compliant
-                else self.make_lifecycle_noncompliant
+                self.make_lifecycle_compliant if compliant else self.make_lifecycle_noncompliant
             ),
             "s3_version_lifecycle": (
                 self.make_version_lifecycle_compliant
@@ -261,35 +252,22 @@ class S3Toggle:
                 else self.make_version_lifecycle_noncompliant
             ),
             "s3_public_access": (
-                self.make_public_access_compliant
-                if compliant
-                else self.make_public_access_noncompliant
+                self.make_public_access_compliant if compliant else self.make_public_access_noncompliant
             ),
             "s3_public_read": (
-                self.make_public_read_compliant
-                if compliant
-                else self.make_public_read_noncompliant
+                self.make_public_read_compliant if compliant else self.make_public_read_noncompliant
             ),
             "s3_public_write": (
-                self.make_public_write_compliant
-                if compliant
-                else self.make_public_write_noncompliant
+                self.make_public_write_compliant if compliant else self.make_public_write_noncompliant
             ),
             "s3_acl_prohibited": (
-                self.make_acl_compliant
-                if compliant
-                else self.make_acl_noncompliant
+                self.make_acl_compliant if compliant else self.make_acl_noncompliant
             ),
             "s3_encryption": (
-                self.make_encryption_compliant
-                if compliant
-                else self.make_encryption_noncompliant
+                self.make_encryption_compliant if compliant else self.make_encryption_noncompliant
             ),
             "s3_generic": (
-                self.make_versioning_compliant
-                if compliant
-                else self.make_versioning_noncompliant
+                self.make_versioning_compliant if compliant else self.make_versioning_noncompliant
             ),
         }
-        fn = mapping.get(strategy, mapping["s3_generic"])
-        fn()
+        mapping.get(strategy, mapping["s3_generic"])()

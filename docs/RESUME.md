@@ -1,48 +1,29 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 17:54 EDT — session closed.
-
-Source of truth: this file + git `main`. Do not replay locked proofs.
+Last updated: 2026-08-27 17:56 EDT — session closed.
 
 ## Locked live proofs
 
-**S3**
-- versioning, lifecycle, version-lifecycle
-- bucket-level public access prohibited
-- SSL-requests-only
-- logging-enabled
-- public-read-prohibited
-- public-write-prohibited
+**S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
+SSL, logging, public-read, public-write.
 
-**EBS** — `ENCRYPTED_VOLUMES` (two volumes). Snapshot public-restorable = partial only.
+**EBS** — ENCRYPTED_VOLUMES. Snapshot public-restorable partial.
 
-**EFS** — encrypted, automatic backups, access points.
+**EFS** — encrypted, backups, access points.
 
-**CloudTrail** — log-file validation on this host. KMS encryption done on the other machine.
+**CloudTrail** — log-file validation (KMS on other machine).
 
 **EC2** — IMDSv2, restricted SSH.
 
-**Backup** — min frequency / retention.
+**Backup** — min frequency/retention.
 
-## Last command (not locked here)
+## Not locked
 
-`pytest tests/test_s3_acl_rules.py -v -s`
-(`S3_BUCKET_ACL_PROHIBITED`, ownership BucketOwnerPreferred vs Enforced).
-Result was not pasted into the closing chat. Confirm PASSED before treating as locked.
+**S3_BUCKET_ACL_PROHIBITED** — FAILED 17:52. Config *did* evaluate
+`cfg-test-14ac09fc-68e6193a` and left it COMPLIANT. Ownership-only toggle is
+not enough. Fix pushed: relax BPA + `ACL=public-read`, then Enforced + private.
+Re-run tomorrow: `pytest tests/test_s3_acl_rules.py -v -s`
 
 ## Parked
 
-- `RESTRICTED_INCOMING_TRAFFIC` / restricted-common-ports — empty evaluations.
-- FSx OpenZFS — filesystem created; Config `ResourceNotDiscoveredException`.
-- `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` — default AES256.
-
-## Tomorrow
-
-1. `git pull` and read this file.
-2. If ACL passed, mark it locked; else re-run that one test.
-3. Do not chase FSx or ports unless asked.
-4. Next product work: another S3 rule, or a conformance-pack-level evaluation — not a new family.
-
-## Hygiene
-
-Destroy Terraform leftovers. Stop the customer managed recorder when idle.
+ports (empty evals), FSx (not discovered), S3 default encryption.
