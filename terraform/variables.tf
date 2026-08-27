@@ -31,6 +31,10 @@ variable "enable_ec2_test" {
   type    = bool
   default = false
 }
+variable "enable_backup_test" {
+  type    = bool
+  default = false
+}
 variable "ebs_subnet_id" {
   type    = string
   default = ""

@@ -28,6 +28,7 @@ markers = [
     "cloudtrail: CloudTrail managed rules",
     "fsx: FSx managed rules",
     "ec2: EC2 managed rules",
+    "backup: AWS Backup managed rules",
     "slow: full evaluation cycles",
     "dry_run: print-only",
 ]

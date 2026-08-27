@@ -50,3 +50,10 @@ module "ec2_test_instance" {
   tags        = local.common_tags
   subnet_id   = var.ec2_subnet_id
 }
+
+module "backup_test" {
+  source      = "./modules/backup_test"
+  count       = var.enable_backup_test ? 1 : 0
+  test_run_id = var.test_run_id
+  tags        = local.common_tags
+}
