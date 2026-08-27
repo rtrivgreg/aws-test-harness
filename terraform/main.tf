@@ -34,3 +34,11 @@ module "cloudtrail_test" {
   test_run_id = var.test_run_id
   tags        = local.common_tags
 }
+
+module "fsx_openzfs_test" {
+  source      = "./modules/fsx_openzfs_test"
+  count       = var.enable_fsx_test ? 1 : 0
+  test_run_id = var.test_run_id
+  tags        = local.common_tags
+  subnet_id   = var.fsx_subnet_id
+}
