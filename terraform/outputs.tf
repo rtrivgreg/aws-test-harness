@@ -14,6 +14,18 @@ output "s3_test_bucket_arn" {
 }
 
 output "s3_test_bucket_id" {
-  description = "ID (same as name for S3) of the test bucket – used as ComplianceResourceId"
+  description = "ID of the test bucket – used as ComplianceResourceId"
   value       = try(module.s3_test_bucket[0].bucket_id, null)
+}
+
+output "ebs_instance_id" {
+  value = try(module.ebs_test_volumes[0].instance_id, null)
+}
+
+output "ebs_unencrypted_volume_id" {
+  value = try(module.ebs_test_volumes[0].unencrypted_volume_id, null)
+}
+
+output "ebs_encrypted_volume_id" {
+  value = try(module.ebs_test_volumes[0].encrypted_volume_id, null)
 }

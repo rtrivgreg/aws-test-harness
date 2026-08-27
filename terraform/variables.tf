@@ -7,8 +7,6 @@ variable "aws_region" {
 variable "test_run_id" {
   description = <<-EOT
     Unique identifier for this test run. Applied as a tag to every resource.
-    Use a UUID or a short memorable value (e.g. from `uuidgen` or CI run id).
-    Required so leftover resources can be identified and cleaned up safely.
   EOT
   type        = string
 }
@@ -23,4 +21,10 @@ variable "enable_s3_test_bucket" {
   description = "Whether to create the minimal S3 bucket used for Config rule testing"
   type        = bool
   default     = true
+}
+
+variable "enable_ebs_test_volumes" {
+  description = "Whether to create the EBS test instance + encrypted/unencrypted volumes"
+  type        = bool
+  default     = false
 }
