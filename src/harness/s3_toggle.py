@@ -75,9 +75,15 @@ class S3Toggle:
             else:
                 raise
 
-    # ------------------------------------------------------------------
-    # Versioning
-    # ------------------------------------------------------------------
+    def _set_ownership(self, setting: str) -> None:
+        log(f"Setting object ownership={setting} on {self.bucket_name}")
+        self.s3.put_bucket_ownership_controls(
+            Bucket=self.bucket_name,
+            OwnershipControls={
+                "Rules": [{"ObjectOwnership": setting}],
+            },
+        )
+
     @dry_run_guard("Enable S3 versioning")
     def make_versioning_compliant(self) -> None:
         log(f"Enabling versioning on {self.bucket_name}")
@@ -96,9 +102,6 @@ class S3Toggle:
         )
         self._nudge_config_recording("versioning-suspended")
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
     @dry_run_guard("Put S3 lifecycle configuration")
     def make_lifecycle_compliant(self) -> None:
         log(f"Putting enabled lifecycle rule on {self.bucket_name}")
@@ -139,9 +142,6 @@ class S3Toggle:
         self.make_versioning_compliant()
         self.make_lifecycle_noncompliant()
 
-    # ------------------------------------------------------------------
-    # Public access block
-    # ------------------------------------------------------------------
     @dry_run_guard("Lock down S3 public access block")
     def make_public_access_compliant(self) -> None:
         log(f"Enabling full public access block on {self.bucket_name}")
@@ -204,6 +204,16 @@ class S3Toggle:
         self.make_public_access_compliant()
         self._nudge_config_recording("public-write-removed")
 
+    @dry_run_guard("Enable ACLs via BucketOwnerPreferred")
+    def make_acl_noncompliant(self) -> None:
+        self._set_ownership("BucketOwnerPreferred")
+        self._nudge_config_recording("acls-enabled")
+
+    @dry_run_guard("Disable ACLs via BucketOwnerEnforced")
+    def make_acl_compliant(self) -> None:
+        self._set_ownership("BucketOwnerEnforced")
+        self._nudge_config_recording("acls-disabled")
+
     @dry_run_guard("Enable S3 SSE-S3")
     def make_encryption_compliant(self) -> None:
         log(f"Enabling AES256 encryption on {self.bucket_name}")
@@ -264,6 +274,11 @@ class S3Toggle:
                 self.make_public_write_compliant
                 if compliant
                 else self.make_public_write_noncompliant
+            ),
+            "s3_acl_prohibited": (
+                self.make_acl_compliant
+                if compliant
+                else self.make_acl_noncompliant
             ),
             "s3_encryption": (
                 self.make_encryption_compliant
