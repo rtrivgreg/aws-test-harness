@@ -1,5 +1,5 @@
-# Minimal EBS pair + tiny instance.
-# No default-VPC assumption: pick an explicit subnet or the first available one.
+# Minimal EBS pair + tiny instance + snapshot of the UNENCRYPTED volume.
+# Encrypted snapshots cannot be made public (needed for public-restorable rule).
 
 data "aws_subnets" "available" {
   filter {
@@ -98,4 +98,14 @@ resource "aws_volume_attachment" "encrypted" {
   device_name = "/dev/sdg"
   volume_id   = aws_ebs_volume.encrypted.id
   instance_id = aws_instance.harness.id
+}
+
+resource "aws_ebs_snapshot" "unencrypted" {
+  volume_id   = aws_ebs_volume.unencrypted.id
+  description = "harness snapshot ${var.test_run_id}"
+
+  tags = merge(var.tags, {
+    Name        = "cfg-ebs-snap-${var.test_run_id}"
+    test-run-id = var.test_run_id
+  })
 }

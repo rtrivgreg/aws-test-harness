@@ -4,18 +4,15 @@ output "test_run_id" {
 }
 
 output "s3_test_bucket_name" {
-  description = "Name of the minimal S3 bucket used for Config rule testing"
-  value       = try(module.s3_test_bucket[0].bucket_name, null)
+  value = try(module.s3_test_bucket[0].bucket_name, null)
 }
 
 output "s3_test_bucket_arn" {
-  description = "ARN of the minimal S3 bucket"
-  value       = try(module.s3_test_bucket[0].bucket_arn, null)
+  value = try(module.s3_test_bucket[0].bucket_arn, null)
 }
 
 output "s3_test_bucket_id" {
-  description = "ID of the test bucket – used as ComplianceResourceId"
-  value       = try(module.s3_test_bucket[0].bucket_id, null)
+  value = try(module.s3_test_bucket[0].bucket_id, null)
 }
 
 output "ebs_instance_id" {
@@ -28,4 +25,8 @@ output "ebs_unencrypted_volume_id" {
 
 output "ebs_encrypted_volume_id" {
   value = try(module.ebs_test_volumes[0].encrypted_volume_id, null)
+}
+
+output "ebs_unencrypted_snapshot_id" {
+  value = try(module.ebs_test_volumes[0].unencrypted_snapshot_id, null)
 }
