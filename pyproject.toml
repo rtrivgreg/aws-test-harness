@@ -24,6 +24,7 @@ timeout = 1800
 markers = [
     "s3: tests that exercise S3-related managed rules",
     "ebs: tests that exercise EBS-related managed rules",
+    "efs: tests that exercise EFS-related managed rules",
     "slow: tests that take longer (full evaluation cycles)",
     "dry_run: tests that only print actions",
 ]

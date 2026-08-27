@@ -1,6 +1,4 @@
-"""
-pytest fixtures for the AWS Config rule test harness.
-"""
+"""pytest fixtures for the AWS Config rule test harness."""
 
 from __future__ import annotations
 
@@ -21,24 +19,9 @@ from harness.tags import get_test_run_id
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print actions instead of calling mutating AWS APIs",
-    )
-    parser.addoption(
-        "--test-run-id",
-        action="store",
-        default=None,
-        help="Override the test-run-id",
-    )
-    parser.addoption(
-        "--terraform-dir",
-        action="store",
-        default="terraform",
-        help="Path to the Terraform root module",
-    )
+    parser.addoption("--dry-run", action="store_true", default=False)
+    parser.addoption("--test-run-id", action="store", default=None)
+    parser.addoption("--terraform-dir", action="store", default="terraform")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,7 +29,7 @@ def _configure_dry_run(request: pytest.FixtureRequest) -> None:
     enabled = request.config.getoption("--dry-run")
     set_dry_run(enabled)
     if enabled:
-        log("Dry-run mode ENABLED - no mutating AWS calls will be made", style="yellow")
+        log("Dry-run mode ENABLED", style="yellow")
 
 
 @pytest.fixture(scope="session")
@@ -95,8 +78,6 @@ def s3_test_bucket(
     tf_dir = Path(request.config.getoption("--terraform-dir"))
     if not tf_dir.exists():
         pytest.skip(f"Terraform directory {tf_dir} not found")
-
-    log("Running terraform apply for S3 test bucket ...")
     env = os.environ.copy()
     env["TF_VAR_test_run_id"] = test_run_id
     env["TF_VAR_aws_region"] = aws_region
@@ -104,14 +85,9 @@ def s3_test_bucket(
     bucket_name = outputs.get("s3_test_bucket_name", {}).get("value")
     if not bucket_name:
         pytest.fail("terraform output s3_test_bucket_name is empty")
-
     log(f"S3 test bucket ready: {bucket_name}")
-    checker = ComplianceChecker(region=aws_region)
-    checker.wait_for_resource_discovered(
-        resource_id=bucket_name,
-        resource_type="AWS::S3::Bucket",
-        timeout_seconds=300,
-        poll_seconds=5,
+    ComplianceChecker(region=aws_region).wait_for_resource_discovered(
+        resource_id=bucket_name, resource_type="AWS::S3::Bucket"
     )
     yield bucket_name
 
@@ -121,37 +97,48 @@ def ebs_volumes(
     test_run_id: str, aws_region: str, request: pytest.FixtureRequest
 ) -> Generator[dict, None, None]:
     tf_dir = Path(request.config.getoption("--terraform-dir"))
-    if not tf_dir.exists():
-        pytest.skip(f"Terraform directory {tf_dir} not found")
-
-    log("Running terraform apply for EBS test volumes ...")
     env = os.environ.copy()
     env["TF_VAR_test_run_id"] = test_run_id
     env["TF_VAR_aws_region"] = aws_region
     env["TF_VAR_enable_ebs_test_volumes"] = "true"
     outputs = _terraform_apply(tf_dir, env)
-
     unenc = outputs.get("ebs_unencrypted_volume_id", {}).get("value")
     enc = outputs.get("ebs_encrypted_volume_id", {}).get("value")
-    inst = outputs.get("ebs_instance_id", {}).get("value")
     snap = outputs.get("ebs_unencrypted_snapshot_id", {}).get("value")
+    inst = outputs.get("ebs_instance_id", {}).get("value")
     if not unenc or not enc:
         pytest.fail("terraform EBS volume outputs are empty")
-
-    log(f"EBS instance={inst} unenc={unenc} enc={enc} snap={snap}")
     checker = ComplianceChecker(region=aws_region)
-    checker.wait_for_resource_discovered(
-        resource_id=unenc, resource_type="AWS::EC2::Volume", poll_seconds=5
-    )
-    checker.wait_for_resource_discovered(
-        resource_id=enc, resource_type="AWS::EC2::Volume", poll_seconds=5
-    )
+    checker.wait_for_resource_discovered(unenc, "AWS::EC2::Volume")
+    checker.wait_for_resource_discovered(enc, "AWS::EC2::Volume")
     yield {
         "instance_id": inst,
         "unencrypted_volume_id": unenc,
         "encrypted_volume_id": enc,
         "unencrypted_snapshot_id": snap,
     }
+
+
+@pytest.fixture(scope="session")
+def efs_filesystems(
+    test_run_id: str, aws_region: str, request: pytest.FixtureRequest
+) -> Generator[dict, None, None]:
+    tf_dir = Path(request.config.getoption("--terraform-dir"))
+    env = os.environ.copy()
+    env["TF_VAR_test_run_id"] = test_run_id
+    env["TF_VAR_aws_region"] = aws_region
+    env["TF_VAR_enable_efs_test_filesystems"] = "true"
+    log("Running terraform apply for EFS test file systems ...")
+    outputs = _terraform_apply(tf_dir, env)
+    unenc = outputs.get("efs_unencrypted_id", {}).get("value")
+    enc = outputs.get("efs_encrypted_id", {}).get("value")
+    if not unenc or not enc:
+        pytest.fail("terraform EFS outputs are empty")
+    log(f"EFS unenc={unenc} enc={enc}")
+    checker = ComplianceChecker(region=aws_region)
+    checker.wait_for_resource_discovered(unenc, "AWS::EFS::FileSystem")
+    checker.wait_for_resource_discovered(enc, "AWS::EFS::FileSystem")
+    yield {"unencrypted_id": unenc, "encrypted_id": enc}
 
 
 @pytest.fixture(scope="session")
