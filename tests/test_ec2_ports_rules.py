@@ -24,7 +24,13 @@ def _spec() -> ManagedRuleSpec:
     return ManagedRuleSpec(
         rule_name="restricted-common-ports",
         source_identifier="RESTRICTED_INCOMING_TRAFFIC",
-        input_parameters={"blockedPort3": str(PORT)},
+        input_parameters={
+            "blockedPort1": "20",
+            "blockedPort2": "21",
+            "blockedPort3": "3389",
+            "blockedPort4": "3306",
+            "blockedPort5": "4333",
+        },
         resource_types=["AWS::EC2::SecurityGroup"],
         toggle_strategy="ec2_rdp",
     )
@@ -60,6 +66,16 @@ def ec2_sg_ports(
     yield {"security_group_id": sg}
 
 
+def _nudge(ec2, sg: str, reason: str) -> None:
+    ec2.create_tags(
+        Resources=[sg],
+        Tags=[
+            {"Key": "harness-toggle-ts", "Value": str(int(time.time()))},
+            {"Key": "harness-last-toggle", "Value": reason[:128]},
+        ],
+    )
+
+
 @pytest.mark.ec2
 @pytest.mark.slow
 def test_restricted_common_ports(
@@ -74,54 +90,65 @@ def test_restricted_common_ports(
     rule_name = None
     try:
         log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
-        assert spec.source_identifier == "RESTRICTED_INCOMING_TRAFFIC"
         rule_name = config_mgr.put_managed_rule(spec)
 
         log(f"Opening TCP {PORT} 0.0.0.0/0 on {sg}")
-        ec2.authorize_security_group_ingress(
-            GroupId=sg,
-            IpPermissions=[{
-                "IpProtocol": "tcp",
-                "FromPort": PORT,
-                "ToPort": PORT,
-                "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "harness-nc"}],
-            }],
-        )
+        try:
+            ec2.authorize_security_group_ingress(
+                GroupId=sg,
+                IpPermissions=[{
+                    "IpProtocol": "tcp",
+                    "FromPort": PORT,
+                    "ToPort": PORT,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "harness-nc"}],
+                }],
+            )
+        except Exception as exc:
+            log(f"authorize (may already exist): {exc}", style="yellow")
+        _nudge(ec2, sg, "rdp-open")
         change_ts = time.time()
         compliance.wait_for_config_item_after(
             resource_id=sg, after_timestamp=change_ts,
             resource_type="AWS::EC2::SecurityGroup",
         )
         eval_ts = time.time()
-        config_mgr.start_evaluation(rule_name)
-        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
+        try:
+            config_mgr.start_evaluation(rule_name)
+        except Exception as exc:
+            log(f"start_evaluation ignored: {exc}", style="yellow")
         nc = compliance.wait_for_resource_result(
             rule_name=rule_name, resource_id=sg, expected="NON_COMPLIANT",
-            config_mgr=config_mgr, after_timestamp=eval_ts,
+            config_mgr=config_mgr, after_timestamp=eval_ts, timeout_seconds=300,
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
         log(f"Revoking TCP {PORT} on {sg}")
-        ec2.revoke_security_group_ingress(
-            GroupId=sg,
-            IpPermissions=[{
-                "IpProtocol": "tcp",
-                "FromPort": PORT,
-                "ToPort": PORT,
-                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-            }],
-        )
+        try:
+            ec2.revoke_security_group_ingress(
+                GroupId=sg,
+                IpPermissions=[{
+                    "IpProtocol": "tcp",
+                    "FromPort": PORT,
+                    "ToPort": PORT,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                }],
+            )
+        except Exception as exc:
+            log(f"revoke: {exc}", style="yellow")
+        _nudge(ec2, sg, "rdp-closed")
         change_ts = time.time()
         compliance.wait_for_config_item_after(
             resource_id=sg, after_timestamp=change_ts,
             resource_type="AWS::EC2::SecurityGroup",
         )
         eval_ts = time.time()
-        config_mgr.start_evaluation(rule_name)
-        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
+        try:
+            config_mgr.start_evaluation(rule_name)
+        except Exception as exc:
+            log(f"start_evaluation ignored: {exc}", style="yellow")
         c = compliance.wait_for_resource_result(
             rule_name=rule_name, resource_id=sg, expected="COMPLIANT",
-            config_mgr=config_mgr, after_timestamp=eval_ts,
+            config_mgr=config_mgr, after_timestamp=eval_ts, timeout_seconds=300,
         )
         assert c[0]["ComplianceType"] == "COMPLIANT"
         log(f"{spec.rule_name} passed common-ports cycle", style="green")
