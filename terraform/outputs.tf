@@ -37,3 +37,11 @@ output "efs_unencrypted_id" {
 output "efs_encrypted_id" {
   value = try(module.efs_test_filesystems[0].encrypted_id, null)
 }
+
+output "efs_access_point_nc_id" {
+  value = try(module.efs_test_filesystems[0].access_point_nc_id, null)
+}
+
+output "efs_access_point_c_id" {
+  value = try(module.efs_test_filesystems[0].access_point_c_id, null)
+}
