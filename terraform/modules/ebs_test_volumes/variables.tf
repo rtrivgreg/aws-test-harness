@@ -14,3 +14,9 @@ variable "volume_size_gb" {
   type        = number
   default     = 1
 }
+
+variable "subnet_id" {
+  description = "Optional subnet for the test instance. Empty = first available subnet in the region."
+  type        = string
+  default     = ""
+}

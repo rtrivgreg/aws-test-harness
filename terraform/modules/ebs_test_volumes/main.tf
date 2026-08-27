@@ -1,16 +1,19 @@
 # Minimal EBS pair + tiny instance.
-# ENCRYPTED_VOLUMES only evaluates ATTACHED volumes.
-# Encryption is immutable, so we keep two volumes instead of toggling one.
+# No default-VPC assumption: pick an explicit subnet or the first available one.
 
-data "aws_vpc" "default" {
-  default = true
+data "aws_subnets" "available" {
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
 }
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+locals {
+  subnet_id = var.subnet_id != "" ? var.subnet_id : try(data.aws_subnets.available.ids[0], "")
+}
+
+data "aws_subnet" "chosen" {
+  id = local.subnet_id
 }
 
 data "aws_ami" "al2023" {
@@ -31,7 +34,7 @@ data "aws_ami" "al2023" {
 resource "aws_security_group" "harness" {
   name        = "cfg-ebs-${var.test_run_id}"
   description = "Harness EBS test instance – no inbound"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = data.aws_subnet.chosen.vpc_id
 
   egress {
     from_port   = 0
@@ -49,7 +52,7 @@ resource "aws_security_group" "harness" {
 resource "aws_instance" "harness" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = "t3.nano"
-  subnet_id                   = data.aws_subnets.default.ids[0]
+  subnet_id                   = data.aws_subnet.chosen.id
   vpc_security_group_ids      = [aws_security_group.harness.id]
   associate_public_ip_address = false
 

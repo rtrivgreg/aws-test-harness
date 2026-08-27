@@ -20,4 +20,5 @@ module "ebs_test_volumes" {
 
   test_run_id = var.test_run_id
   tags        = local.common_tags
+  subnet_id   = var.ebs_subnet_id
 }

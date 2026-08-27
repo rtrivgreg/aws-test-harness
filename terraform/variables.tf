@@ -5,9 +5,7 @@ variable "aws_region" {
 }
 
 variable "test_run_id" {
-  description = <<-EOT
-    Unique identifier for this test run. Applied as a tag to every resource.
-  EOT
+  description = "Unique identifier for this test run. Applied as a tag to every resource."
   type        = string
 }
 
@@ -27,4 +25,10 @@ variable "enable_ebs_test_volumes" {
   description = "Whether to create the EBS test instance + encrypted/unencrypted volumes"
   type        = bool
   default     = false
+}
+
+variable "ebs_subnet_id" {
+  description = "Optional subnet for the EBS test instance"
+  type        = string
+  default     = ""
 }
