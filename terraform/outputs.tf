@@ -1,6 +1,5 @@
 output "test_run_id" {
-  description = "The test-run-id that was applied to all resources"
-  value       = var.test_run_id
+  value = var.test_run_id
 }
 
 output "s3_test_bucket_name" {
@@ -29,4 +28,12 @@ output "ebs_encrypted_volume_id" {
 
 output "ebs_unencrypted_snapshot_id" {
   value = try(module.ebs_test_volumes[0].unencrypted_snapshot_id, null)
+}
+
+output "efs_unencrypted_id" {
+  value = try(module.efs_test_filesystems[0].unencrypted_id, null)
+}
+
+output "efs_encrypted_id" {
+  value = try(module.efs_test_filesystems[0].encrypted_id, null)
 }

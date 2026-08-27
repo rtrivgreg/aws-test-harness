@@ -22,3 +22,11 @@ module "ebs_test_volumes" {
   tags        = local.common_tags
   subnet_id   = var.ebs_subnet_id
 }
+
+module "efs_test_filesystems" {
+  source = "./modules/efs_test_filesystems"
+  count  = var.enable_efs_test_filesystems ? 1 : 0
+
+  test_run_id = var.test_run_id
+  tags        = local.common_tags
+}
