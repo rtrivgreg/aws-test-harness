@@ -1,37 +1,29 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 15:01 EDT
+Last updated: 2026-08-27 15:07 EDT
 
-Source of truth: git on `main`, not the chat history.
+Source of truth: git on `main`.
 
 ## Locked live proofs
 
-**S3 full cycle**
-- `S3_BUCKET_VERSIONING_ENABLED`
-- `S3_LIFECYCLE_POLICY_CHECK`
-- `S3_VERSION_LIFECYCLE_POLICY_CHECK`
-- `S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED`
+**S3 full cycle** — versioning, lifecycle, version-lifecycle, bucket-level public access prohibited.
 
-**EBS**
-- `ENCRYPTED_VOLUMES` — proven.
-- `EBS_SNAPSHOT_PUBLIC_RESTORABLE_CHECK` — partial only. Do not re-run in a shared account.
+**EBS** — `ENCRYPTED_VOLUMES` proven. Snapshot public-restorable partial only.
 
-**EFS**
-- `EFS_ENCRYPTED_CHECK` — proven 2026-08-27.
-- `EFS_AUTOMATIC_BACKUPS_ENABLED` (harness-efs-automatic-backups-enabled-14ac09fc) — proven 2026-08-27.
+**EFS** (2026-08-27)
+- `EFS_ENCRYPTED_CHECK`
+- `EFS_AUTOMATIC_BACKUPS_ENABLED`
+- access-point rules (`test_efs_access_point_rules.py`) — PASSED 15:07 EDT
 
-**S3 skip:** `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` — default AES256.
+**S3 skip:** server-side encryption default AES256.
 
 ## Next
 
+EFS family representative slice is locked. Next cheapest non-FSx proof:
+
 ```bash
 git pull
-pytest tests/test_efs_access_point_rules.py -v -s
+pytest tests/test_cloudtrail_rules.py -v -s
 ```
 
-Then CloudTrail validation. Defer FSx.
-
-## Hygiene
-
-Destroy Terraform at end of session. Delete leftover `harness-*` rules.
-Stop recorder when idle.
+Defer FSx. Destroy EFS resources when you leave the EFS session if CloudTrail uses a separate apply.
