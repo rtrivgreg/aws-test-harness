@@ -3,6 +3,7 @@
 1) email aliases: awzr-rtrivgreg@yahoo.com
 2) harness
 3) make 3 cps. Test val change via amplify
+4) When you sit down: git pull, start the recorder, then either finish restricted-common-ports (fix is already on main) or pick another S3 rule on the existing bucket pattern. No new architecture needed.
 
 Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
 
