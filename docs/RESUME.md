@@ -1,10 +1,11 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 16:39 EDT
+Last updated: 2026-08-27 17:00 EDT
 
 ## Locked live proofs
 
-**S3** — versioning, lifecycle, version-lifecycle, public-access prohibited.
+**S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
+`s3-bucket-ssl-requests-only` PASSED 17:00 EDT.
 
 **EBS** — `ENCRYPTED_VOLUMES`. Snapshot public-restorable partial only.
 
@@ -14,17 +15,16 @@ Last updated: 2026-08-27 16:39 EDT
 
 **EC2** — IMDSv2, restricted SSH.
 
-**Backup** — min frequency/retention. PASSED 16:17 EDT.
+**Backup** — min frequency/retention.
 
 ## Parked
 
 **restricted-common-ports** — empty evaluation results.
-
-**FSx OpenZFS copy-tags** — filesystem created (`fs-0cd37985bac7d2362`) but Config
-`ResourceNotDiscoveredException` for `AWS::FSx::FileSystem`. Do not keep the FS.
-
+**FSx OpenZFS** — Config never discovered `AWS::FSx::FileSystem`.
 **S3 default encryption** — skip.
 
-## Hygiene
+## Next
 
-Destroy Terraform (especially FSx). Stop the recorder when idle.
+```bash
+pytest tests/test_s3_logging_rules.py -v -s
+```
