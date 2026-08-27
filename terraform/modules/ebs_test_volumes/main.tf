@@ -33,7 +33,7 @@ data "aws_ami" "al2023" {
 
 resource "aws_security_group" "harness" {
   name        = "cfg-ebs-${var.test_run_id}"
-  description = "Harness EBS test instance – no inbound"
+  description = "Harness EBS test instance - no inbound"
   vpc_id      = data.aws_subnet.chosen.vpc_id
 
   egress {
