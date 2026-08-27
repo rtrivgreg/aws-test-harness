@@ -142,13 +142,24 @@ def efs_filesystems(
     outputs = _terraform_apply(tf_dir, env)
     unenc = outputs.get("efs_unencrypted_id", {}).get("value")
     enc = outputs.get("efs_encrypted_id", {}).get("value")
+    ap_nc = outputs.get("efs_access_point_nc_id", {}).get("value")
+    ap_c = outputs.get("efs_access_point_c_id", {}).get("value")
     if not unenc or not enc:
         pytest.fail("terraform EFS outputs are empty")
-    log(f"EFS unenc={unenc} enc={enc}")
+    log(f"EFS unenc={unenc} enc={enc} ap_nc={ap_nc} ap_c={ap_c}")
     checker = ComplianceChecker(region=aws_region)
     checker.wait_for_resource_discovered(unenc, "AWS::EFS::FileSystem")
     checker.wait_for_resource_discovered(enc, "AWS::EFS::FileSystem")
-    yield {"unencrypted_id": unenc, "encrypted_id": enc}
+    if ap_nc:
+        checker.wait_for_resource_discovered(ap_nc, "AWS::EFS::AccessPoint")
+    if ap_c:
+        checker.wait_for_resource_discovered(ap_c, "AWS::EFS::AccessPoint")
+    yield {
+        "unencrypted_id": unenc,
+        "encrypted_id": enc,
+        "access_point_nc_id": ap_nc,
+        "access_point_c_id": ap_c,
+    }
 
 
 @pytest.fixture(scope="session")
