@@ -1,6 +1,6 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-27 15:38 EDT
+Last updated: 2026-08-27 16:17 EDT
 
 ## Locked live proofs
 
@@ -10,15 +10,22 @@ Last updated: 2026-08-27 15:38 EDT
 
 **EFS** — encrypted, automatic backups, access points.
 
-**CloudTrail** — log-file validation this host. KMS on the other machine.
+**CloudTrail** — log-file validation this host. KMS encryption on the other machine.
 
-**EC2** — IMDSv2 PASSED. Restricted SSH PASSED 15:38 EDT.
+**EC2** — IMDSv2, restricted SSH. Proven.
+
+**Backup** — `test_backup_rules.py` min frequency/retention. PASSED 16:17 EDT.
+
+## Gaps
+
+**restricted-common-ports / RESTRICTED_INCOMING_TRAFFIC** — implemented; live eval returned empty results for 600s. Parked.
+
+**S3 encryption** — default AES256; skip.
+
+**CloudTrail KMS** — skip on this host (ARN on the other machine).
+
+**FSx** — deferred (cost / time).
 
 ## Next
 
-```bash
-git pull
-pytest tests/test_ec2_ports_rules.py -v -s
-```
-
-Then Backup or stop. Defer FSx unless you specifically want it.
+FSx only if you want it. Otherwise destroy Terraform and stop the recorder.
