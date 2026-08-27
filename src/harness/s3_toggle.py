@@ -9,6 +9,7 @@ configuration item promptly.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Optional
 
@@ -41,6 +42,18 @@ class S3Toggle:
         except ClientError as exc:
             log(f"Tag nudge failed (ignored): {exc}", style="yellow")
 
+    def _public_read_policy(self) -> str:
+        return json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Sid": "HarnessPublicRead",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{self.bucket_name}/*",
+            }],
+        })
+
     # ------------------------------------------------------------------
     # Versioning
     # ------------------------------------------------------------------
@@ -67,7 +80,6 @@ class S3Toggle:
     # ------------------------------------------------------------------
     @dry_run_guard("Put S3 lifecycle configuration")
     def make_lifecycle_compliant(self) -> None:
-        """At least one Enabled lifecycle rule (sufficient when Config params are empty)."""
         log(f"Putting enabled lifecycle rule on {self.bucket_name}")
         self.s3.put_bucket_lifecycle_configuration(
             Bucket=self.bucket_name,
@@ -98,13 +110,11 @@ class S3Toggle:
 
     @dry_run_guard("Versioning on + lifecycle on")
     def make_version_lifecycle_compliant(self) -> None:
-        """S3_VERSION_LIFECYCLE_POLICY_CHECK: versioned bucket with lifecycle."""
         self.make_versioning_compliant()
         self.make_lifecycle_compliant()
 
     @dry_run_guard("Versioning on + lifecycle off")
     def make_version_lifecycle_noncompliant(self) -> None:
-        """Versioned bucket without lifecycle → NON_COMPLIANT for version-lifecycle rule."""
         self.make_versioning_compliant()
         self.make_lifecycle_noncompliant()
 
@@ -138,6 +148,32 @@ class S3Toggle:
             },
         )
         self._nudge_config_recording("public-access-relaxed")
+
+    # ------------------------------------------------------------------
+    # Public read (policy). ACLs are unused under BucketOwnerEnforced.
+    # ------------------------------------------------------------------
+    @dry_run_guard("Allow public GetObject + relax BPA")
+    def make_public_read_noncompliant(self) -> None:
+        self.make_public_access_noncompliant()
+        log(f"Putting public GetObject policy on {self.bucket_name}")
+        self.s3.put_bucket_policy(
+            Bucket=self.bucket_name,
+            Policy=self._public_read_policy(),
+        )
+        self._nudge_config_recording("public-read-policy")
+
+    @dry_run_guard("Remove public policy + lock BPA")
+    def make_public_read_compliant(self) -> None:
+        log(f"Deleting bucket policy on {self.bucket_name}")
+        try:
+            self.s3.delete_bucket_policy(Bucket=self.bucket_name)
+        except ClientError as exc:
+            if "NoSuchBucketPolicy" in str(exc):
+                log("Bucket policy already absent")
+            else:
+                raise
+        self.make_public_access_compliant()
+        self._nudge_config_recording("public-read-removed")
 
     # ------------------------------------------------------------------
     # Server-side encryption
@@ -192,6 +228,11 @@ class S3Toggle:
                 self.make_public_access_compliant
                 if compliant
                 else self.make_public_access_noncompliant
+            ),
+            "s3_public_read": (
+                self.make_public_read_compliant
+                if compliant
+                else self.make_public_read_noncompliant
             ),
             "s3_encryption": (
                 self.make_encryption_compliant
