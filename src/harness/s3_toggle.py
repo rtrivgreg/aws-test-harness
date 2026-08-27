@@ -54,6 +54,27 @@ class S3Toggle:
             }],
         })
 
+    def _public_write_policy(self) -> str:
+        return json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Sid": "HarnessPublicWrite",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:PutObject",
+                "Resource": f"arn:aws:s3:::{self.bucket_name}/*",
+            }],
+        })
+
+    def _delete_bucket_policy(self) -> None:
+        try:
+            self.s3.delete_bucket_policy(Bucket=self.bucket_name)
+        except ClientError as exc:
+            if "NoSuchBucketPolicy" in str(exc):
+                log("Bucket policy already absent")
+            else:
+                raise
+
     # ------------------------------------------------------------------
     # Versioning
     # ------------------------------------------------------------------
@@ -149,9 +170,6 @@ class S3Toggle:
         )
         self._nudge_config_recording("public-access-relaxed")
 
-    # ------------------------------------------------------------------
-    # Public read (policy). ACLs are unused under BucketOwnerEnforced.
-    # ------------------------------------------------------------------
     @dry_run_guard("Allow public GetObject + relax BPA")
     def make_public_read_noncompliant(self) -> None:
         self.make_public_access_noncompliant()
@@ -165,19 +183,27 @@ class S3Toggle:
     @dry_run_guard("Remove public policy + lock BPA")
     def make_public_read_compliant(self) -> None:
         log(f"Deleting bucket policy on {self.bucket_name}")
-        try:
-            self.s3.delete_bucket_policy(Bucket=self.bucket_name)
-        except ClientError as exc:
-            if "NoSuchBucketPolicy" in str(exc):
-                log("Bucket policy already absent")
-            else:
-                raise
+        self._delete_bucket_policy()
         self.make_public_access_compliant()
         self._nudge_config_recording("public-read-removed")
 
-    # ------------------------------------------------------------------
-    # Server-side encryption
-    # ------------------------------------------------------------------
+    @dry_run_guard("Allow public PutObject + relax BPA")
+    def make_public_write_noncompliant(self) -> None:
+        self.make_public_access_noncompliant()
+        log(f"Putting public PutObject policy on {self.bucket_name}")
+        self.s3.put_bucket_policy(
+            Bucket=self.bucket_name,
+            Policy=self._public_write_policy(),
+        )
+        self._nudge_config_recording("public-write-policy")
+
+    @dry_run_guard("Remove public write policy + lock BPA")
+    def make_public_write_compliant(self) -> None:
+        log(f"Deleting bucket policy on {self.bucket_name}")
+        self._delete_bucket_policy()
+        self.make_public_access_compliant()
+        self._nudge_config_recording("public-write-removed")
+
     @dry_run_guard("Enable S3 SSE-S3")
     def make_encryption_compliant(self) -> None:
         log(f"Enabling AES256 encryption on {self.bucket_name}")
@@ -233,6 +259,11 @@ class S3Toggle:
                 self.make_public_read_compliant
                 if compliant
                 else self.make_public_read_noncompliant
+            ),
+            "s3_public_write": (
+                self.make_public_write_compliant
+                if compliant
+                else self.make_public_write_noncompliant
             ),
             "s3_encryption": (
                 self.make_encryption_compliant
