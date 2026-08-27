@@ -284,7 +284,8 @@ class ComplianceChecker:
                 r.get("EvaluationResultIdentifier", {})
                 .get("EvaluationResultQualifier", {})
             )
-            if qual.get("ResourceId") != resource_id:
+            rid = qual.get("ResourceId") or ""
+            if rid != resource_id and not rid.endswith(resource_id):
                 continue
             if after_timestamp is not None:
                 recorded = _to_epoch(
@@ -336,16 +337,21 @@ class ComplianceChecker:
                 )
                 return matching
 
-            any_for_resource = self._matching_results(
-                last_results, resource_id, after_timestamp=after_timestamp
-            )
-            seen = [r.get("ComplianceType") for r in any_for_resource] or ["none"]
+            ids = []
+            for r in last_results[:8]:
+                q = (
+                    r.get("EvaluationResultIdentifier", {})
+                    .get("EvaluationResultQualifier", {})
+                )
+                ids.append(
+                    f"{q.get('ResourceId')}:{r.get('ComplianceType')}"
+                )
             log(
                 f"Waiting for {expected} on {resource_id} under {rule_name} "
-                f"(attempt {attempt}; post-ts types seen={seen})"
+                f"(attempt {attempt}; results={len(last_results)}; sample={ids})"
             )
 
-            if config_mgr is not None and attempt % 3 == 0:
+            if config_mgr is not None and attempt % 2 == 0:
                 try:
                     config_mgr.start_evaluation(rule_name)
                 except Exception as exc:
