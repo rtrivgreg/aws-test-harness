@@ -50,6 +50,16 @@ def aws_region() -> str:
 
 
 def _terraform_apply(tf_dir: Path, env: dict) -> dict:
+    init = subprocess.run(
+        ["terraform", "init", "-input=false"],
+        cwd=tf_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if init.returncode != 0:
+        log(init.stderr, style="red")
+        pytest.fail(f"terraform init failed: {init.stderr}")
     result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         cwd=tf_dir,
