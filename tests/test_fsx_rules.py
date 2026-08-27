@@ -55,7 +55,7 @@ def fsx_filesystem(
         pytest.fail("terraform fsx_file_system_id is empty")
     log(f"FSx file system ready: {fs_id}")
     ComplianceChecker(region=aws_region).wait_for_resource_discovered(
-        fs_id, "AWS::FSx::FileSystem", timeout_seconds=600, poll_seconds=10
+        fs_id, "AWS::FSx::FileSystem", timeout_seconds=1200, poll_seconds=15
     )
     yield {"file_system_id": fs_id}
 
@@ -82,7 +82,7 @@ def test_fsx_openzfs_copy_tags(
             resource_id=fs_id,
             after_timestamp=change_ts,
             resource_type="AWS::FSx::FileSystem",
-            timeout_seconds=300,
+            timeout_seconds=600,
         )
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
@@ -102,7 +102,7 @@ def test_fsx_openzfs_copy_tags(
             resource_id=fs_id,
             after_timestamp=change_ts,
             resource_type="AWS::FSx::FileSystem",
-            timeout_seconds=300,
+            timeout_seconds=600,
         )
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
