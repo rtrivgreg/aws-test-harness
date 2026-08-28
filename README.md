@@ -9,9 +9,12 @@ A Framework for systematically validating AWS Config **managed rules** (and late
 - **Unique `test-run-id` tag** on every resource and Config rule for safe identification and cleanup.
 - **Dry-run mode** supported throughout.
 - Heavily commented so the pattern is clear when extending to EBS, EFS, EC2, CloudTrail, Backup, etc.
+<BR>
 
 <details>
   <summary>High-level flow (per managed rule)</summary>
+
+<HR>
 
 1. Terraform provisions (or re-uses) a minimal shared S3 bucket tagged with the current `test-run-id`.
 2. For each rule under test:
@@ -28,8 +31,11 @@ A Framework for systematically validating AWS Config **managed rules** (and late
 
 </details>
 
-## Repository layout
+<details>
+  <summary>Repository layout</summary>
 
+  <HR>
+  
 ```
 aws-test-harness/
 ├── README.md
@@ -61,8 +67,13 @@ aws-test-harness/
     ├── test_s3_rules.py               # first vertical slice
     └── helpers.py
 ```
+
+</details>
+
 <details>
   <summary>Prerequisites</summary>
+
+  <HR>
   
 - AWS credentials with permissions to:
   - Manage Config rules (`config:PutConfigRule`, `config:DeleteConfigRule`, `config:StartConfigRulesEvaluation`, `config:GetComplianceDetailsByConfigRule`, `config:DescribeConfigRuleEvaluationStatus`, …)
@@ -76,7 +87,8 @@ aws-test-harness/
 
 <details>
   <summary>Quick start (after cloning)</summary>
-  
+
+  <HR>
   ```bash
 # 1. Python deps
 python -m venv .venv
