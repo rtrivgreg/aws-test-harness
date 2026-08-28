@@ -47,7 +47,10 @@ class ConfigRuleManager:
 
     @dry_run_guard("PutConfigRule")
     def put_managed_rule(
-        self, spec: ManagedRuleSpec, resource_id: Optional[str] = None
+        self,
+        spec: ManagedRuleSpec,
+        resource_id: Optional[str] = None,
+        maximum_execution_frequency: Optional[str] = None,
     ) -> str:
         rule_name = self._rule_name_for_run(spec.rule_name)
         log(f"Putting managed rule {rule_name} (source={spec.source_identifier})")
@@ -64,6 +67,9 @@ class ConfigRuleManager:
             if spec.input_parameters
             else "{}",
         }
+
+        if maximum_execution_frequency:
+            config_rule["MaximumExecutionFrequency"] = maximum_execution_frequency
 
         if spec.resource_types:
             scope: Dict[str, Any] = {"ComplianceResourceTypes": spec.resource_types}
@@ -100,6 +106,27 @@ class ConfigRuleManager:
         )
         statuses = resp.get("ConfigRulesEvaluationStatus", [])
         return statuses[0] if statuses else {}
+
+    def describe_rule(self, rule_name: str) -> dict:
+        resp = self.client.describe_config_rules(ConfigRuleNames=[rule_name])
+        rules = resp.get("ConfigRules", [])
+        return rules[0] if rules else {}
+
+    def describe_compliance_by_rule(self, rule_name: str) -> dict:
+        try:
+            return self.client.describe_compliance_by_config_rule(
+                ConfigRuleNames=[rule_name]
+            )
+        except ClientError as exc:
+            return {"error": str(exc)}
+
+    def dump_rule_debug(self, rule_name: str) -> None:
+        status = self.describe_evaluation_status(rule_name)
+        rule = self.describe_rule(rule_name)
+        summary = self.describe_compliance_by_rule(rule_name)
+        log(f"DEBUG rule={json.dumps(rule, default=str)[:2000]}")
+        log(f"DEBUG status={json.dumps(status, default=str)[:2000]}")
+        log(f"DEBUG compliance_summary={json.dumps(summary, default=str)[:2000]}")
 
     @dry_run_guard("DeleteConfigRule")
     def delete_rule(self, rule_name: str) -> None:

@@ -1,6 +1,6 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 06:40 EDT
+Last updated: 2026-08-28 07:02 EDT
 
 ## Locked live proofs
 
@@ -19,16 +19,17 @@ SSL, logging, public-read, public-write, ACL prohibited.
 
 ## In flight
 
-**restricted-common-ports** — last run 06:38 EDT failed after 12m:
-`RuntimeError: Evaluation has not completed yet`.
-`LastSuccessfulEvaluationTime` stayed empty. Recorder is fine; SG CIs exist.
-Likely first eval was sweeping every SG in the account (exclusion recorder).
+**restricted-common-ports** — 07:00 EDT: wait_for_evaluation passed
+(invocation time present) but GetComplianceDetails stayed `[]` for 10m
+with ComplianceResourceId scope. That scope is now removed.
 
-Fix on main: scope the rule to the test SG
-(`PutConfigRule.Scope.ComplianceResourceId`) and treat
-`LastSuccessfulInvocationTime` as completion.
+Also set MaximumExecutionFrequency=One_Hour, param blockedPorts=3389,
+and dump rule/status/compliance summary on empty results.
 
 Re-run: `git pull && pytest tests/test_ec2_ports_rules.py -v -s`
+
+If DEBUG lines show ComplianceType INSUFFICIENT_DATA or no resources
+in scope, park this identifier and use vpc-sg-port-restriction-check.
 
 ## Parked
 

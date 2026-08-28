@@ -24,13 +24,7 @@ def _spec() -> ManagedRuleSpec:
     return ManagedRuleSpec(
         rule_name="restricted-common-ports",
         source_identifier="RESTRICTED_INCOMING_TRAFFIC",
-        input_parameters={
-            "blockedPort1": "20",
-            "blockedPort2": "21",
-            "blockedPort3": "3389",
-            "blockedPort4": "3306",
-            "blockedPort5": "4333",
-        },
+        input_parameters={"blockedPorts": "3389"},
         resource_types=["AWS::EC2::SecurityGroup"],
         toggle_strategy="ec2_rdp",
     )
@@ -90,7 +84,11 @@ def test_restricted_common_ports(
     rule_name = None
     try:
         log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
-        rule_name = config_mgr.put_managed_rule(spec, resource_id=sg)
+        # Do not set ComplianceResourceId: this managed rule has published
+        # zero EvaluationResults when scoped to a single SG.
+        rule_name = config_mgr.put_managed_rule(
+            spec, maximum_execution_frequency="One_Hour"
+        )
 
         log(f"Opening TCP {PORT} 0.0.0.0/0 on {sg}")
         try:
@@ -114,9 +112,10 @@ def test_restricted_common_ports(
         eval_ts = time.time()
         config_mgr.start_evaluation(rule_name)
         config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
+        config_mgr.dump_rule_debug(rule_name)
         nc = compliance.wait_for_resource_result(
             rule_name=rule_name, resource_id=sg, expected="NON_COMPLIANT",
-            config_mgr=config_mgr, after_timestamp=eval_ts, timeout_seconds=600,
+            config_mgr=config_mgr, after_timestamp=None, timeout_seconds=600,
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
@@ -162,6 +161,10 @@ def test_restricted_common_ports(
         except Exception:
             pass
         if rule_name:
+            try:
+                config_mgr.dump_rule_debug(rule_name)
+            except Exception:
+                pass
             try:
                 config_mgr.delete_rule(rule_name)
             except Exception as exc:
