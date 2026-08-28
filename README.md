@@ -3,7 +3,6 @@
 1) email aliases: awzr-rtrivgreg@yahoo.com
 2) harness
 3) make 3 cps. Test val change via amplify
-4) When you sit down: git pull, start the recorder, then either finish restricted-common-ports (fix is already on main) or pick another S3 rule on the existing bucket pattern. No new architecture needed.
 
 Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
 
@@ -116,6 +115,39 @@ pytest tests/test_s3_rules.py -v
 
 ## Relationship to existing tooling
 
-- **aws-crud-rules-db** / DynamoDB catalog = system of record for rule metadata and group bindings.
-- **cpgNG.py** = pack renderer.
+- **aws- Compliance analyzwe
+- **aws-crud-rules-db** / DynamoDB catalog = system of record for rule parameters, metadata and group bindings.
+- **cpgNG.py** = pack generator.
 - **This harness** = validation layer that proves the parameters chosen in a binding actually produce the expected COMPLIANT / NON_COMPLIANT outcomes on a controlled resource.
+
+DAILY EC2 
+# ubuntu EC2 (not macbook)
+please resume https://github.com/rtrivgreg/aws-test-harness.git
+
+source .venv/bin/activate
+
+export CATALOG_TABLE_NAME="y62db-config-rule-catalog"
+export CATALOG_GROUP="default"
+export AWS_REGION="us-east-1"
+export TEST_RUN_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-8)
+
+cd repost
+ubuntu@ip-10-0-1-190:~/repost$ 
+cd aws-test-harness
+git pull
+
+ubuntu@ip-10-0-1-190:~/repost/aws-test-harness$ aws configservice describe-configuration-recorder-status \
+  --region us-east-1
+{
+    "ConfigurationRecordersStatus": [
+        {
+            "arn": "arn:aws:config:us-east-1:418295699841:configuration-recorder/default/eu6cs99surp9xy02",
+            "name": "default",
+            "lastStartTime": "2026-08-28T09:10:06.063000+00:00",
+            "lastStopTime": "2026-08-28T05:01:36.453000+00:00",
+            "recording": true,
+            "lastStatus": "SUCCESS",
+            "lastStatusChangeTime": "2026-08-28T09:10:16.775000+00:00"
+        }
+    ]
+}
