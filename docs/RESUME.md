@@ -1,6 +1,6 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 07:22 EDT
+Last updated: 2026-08-28 07:41 EDT
 
 ## Locked live proofs
 
@@ -13,21 +13,21 @@ SSL, logging, public-read, public-write, ACL prohibited.
 
 **CloudTrail** — log-file validation (KMS on other machine).
 
-**EC2** — IMDSv2, restricted SSH.
+**EC2** — IMDSv2, restricted SSH, vpc-sg-port-restriction-check
+(3389 open/close on sg-07fa913d0e8961833, run ef57dcf4).
 
 **Backup** — min frequency/retention.
 
-## In flight
+## Next
 
-**vpc-sg-port-restriction-check** — replacement for restricted-common-ports.
-Same SG, same 3389 open/close toggle.
+S3 default encryption (`s3_toggle.make_encryption_*` already exists).
 
-Re-run: `git pull && pytest tests/test_ec2_ports_rules.py -v -s`
+`pytest tests/test_s3_rules.py -k encryption -v -s`
+or add a dedicated test if that selector is empty.
 
 ## Parked
 
-**RESTRICTED_INCOMING_TRAFFIC / restricted-common-ports** — four live
-misses 2026-08-28. Rule invokes; GetComplianceDetails stays empty.
-Skipped in pytest. Do not spend another 15-minute cycle on it.
+**RESTRICTED_INCOMING_TRAFFIC / restricted-common-ports** — INSUFFICIENT_DATA
++ empty EvaluationResults after successful invocation. Skipped in pytest.
 
-FSx (not discovered), S3 default encryption.
+FSx (not discovered).
