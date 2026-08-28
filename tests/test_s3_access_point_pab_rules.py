@@ -1,6 +1,8 @@
 """S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS — temp AP on the harness test bucket.
 
-NC: all four AP block-public flags false. C: all four true.
+NC: create AP with all four PAB flags false.
+C: delete and recreate AP with all four true.
+(s3control on this runner has no put_access_point_public_access_block.)
 Deletes the access point in finally.
 """
 
@@ -28,13 +30,33 @@ def _spec() -> ManagedRuleSpec:
 
 
 def _pab(locked: bool) -> dict:
-    flag = locked
     return {
-        "BlockPublicAcls": flag,
-        "IgnorePublicAcls": flag,
-        "BlockPublicPolicy": flag,
-        "RestrictPublicBuckets": flag,
+        "BlockPublicAcls": locked,
+        "IgnorePublicAcls": locked,
+        "BlockPublicPolicy": locked,
+        "RestrictPublicBuckets": locked,
     }
+
+
+def _create_ap(s3c, account: str, name: str, bucket: str, locked: bool) -> None:
+    s3c.create_access_point(
+        AccountId=account,
+        Name=name,
+        Bucket=bucket,
+        PublicAccessBlockConfiguration=_pab(locked),
+    )
+    log(f"Created access point {name} PAB-locked={locked}")
+
+
+def _delete_ap(s3c, account: str, name: str) -> None:
+    try:
+        s3c.delete_access_point(AccountId=account, Name=name)
+        log(f"Deleted access point {name}")
+        time.sleep(5)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code not in ("NoSuchAccessPoint", "NoSuchAccessPointException"):
+            raise
 
 
 @pytest.mark.s3
@@ -53,25 +75,9 @@ def test_s3_access_point_public_access_blocks(
     created = False
     try:
         log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
-        try:
-            s3c.create_access_point(
-                AccountId=account,
-                Name=ap_name,
-                Bucket=s3_test_bucket,
-                PublicAccessBlockConfiguration=_pab(False),
-            )
-            created = True
-            log(f"Created access point {ap_name} on {s3_test_bucket} (PAB off)")
-        except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") != "AccessPointAlreadyOwnedByYou":
-                raise
-            created = True
-            s3c.put_access_point_public_access_block(
-                AccountId=account,
-                Name=ap_name,
-                PublicAccessBlockConfiguration=_pab(False),
-            )
-            log(f"Reused access point {ap_name} (PAB off)")
+        _delete_ap(s3c, account, ap_name)
+        _create_ap(s3c, account, ap_name, s3_test_bucket, locked=False)
+        created = True
 
         compliance.wait_for_resource_discovered(
             resource_id=ap_name, resource_type="AWS::S3::AccessPoint"
@@ -91,12 +97,11 @@ def test_s3_access_point_public_access_blocks(
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
-        log(f"Locking PAB on access point {ap_name}")
-        s3c.put_access_point_public_access_block(
-            AccountId=account,
-            Name=ap_name,
-            PublicAccessBlockConfiguration=_pab(True),
-        )
+        log(f"Recreating {ap_name} with PAB locked")
+        _delete_ap(s3c, account, ap_name)
+        created = False
+        _create_ap(s3c, account, ap_name, s3_test_bucket, locked=True)
+        created = True
         change_ts = time.time()
         compliance.wait_for_config_item_after(
             resource_id=ap_name,
@@ -119,8 +124,7 @@ def test_s3_access_point_public_access_blocks(
     finally:
         if created:
             try:
-                s3c.delete_access_point(AccountId=account, Name=ap_name)
-                log(f"Deleted access point {ap_name}")
+                _delete_ap(s3c, account, ap_name)
             except Exception as exc:
                 log(f"Cleanup AP: {exc}", style="yellow")
         if rule_name:
