@@ -51,8 +51,9 @@ backend "s3" {
 ## Daily resume (EC2)
 
 ```bash
-cd ~/repost/aws-test-harness
+git stash
 git pull
+cd ~/repost/aws-test-harness
 source .venv/bin/activate
 export AWS_REGION=us-east-1
 export AWS_DEFAULT_REGION=us-east-1
