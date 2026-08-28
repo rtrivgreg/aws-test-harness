@@ -1,10 +1,10 @@
 # Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 19:35 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 19:46 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **24** · partial 1 · parked 2 · catalog-only **32** · total 59.
+**Counts:** live **25** · partial 1 · parked 2 · catalog-only **31** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
@@ -44,7 +44,7 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | Account-scoped |
 | 35 | s3-bucket-acl-prohibited | S3_BUCKET_ACL_PROHIBITED | S3 | live | |
 | 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | live | 2026-08-28 blacklistedActionPattern |
-| 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | catalog-only | Needs dest in another region |
+| 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | live | 2026-08-28 dest us-west-2 deleted |
 | 38 | s3-bucket-default-lock-enabled | S3_BUCKET_DEFAULT_LOCK_ENABLED | S3 | catalog-only | Needs Object Lock at create |
 | 39 | s3-bucket-level-public-access-prohibited | S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED | S3 | live | |
 | 40 | s3-bucket-logging-enabled | S3_BUCKET_LOGGING_ENABLED | S3 | live | |
