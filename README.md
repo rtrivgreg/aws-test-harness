@@ -1,9 +1,4 @@
 # AWS Config Rule Test Harness
-8/27/2026 ACT II
-1) email aliases: awzr-rtrivgreg@yahoo.com
-2) harness
-3) make 3 cps. Test val change via amplify
-
 Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
 
 ## Design Principles
@@ -112,13 +107,6 @@ pytest tests/test_s3_rules.py -v
 - Prefer running in a dedicated test account.
 - Always start with `--dry-run`.
 - The framework never deletes resources that lack the expected `test-run-id` tag.
-
-## Relationship to existing tooling
-
-- **aws- Compliance analyzwe
-- **aws-crud-rules-db** / DynamoDB catalog = system of record for rule parameters, metadata and group bindings.
-- **cpgNG.py** = pack generator.
-- **This harness** = validation layer that proves the parameters chosen in a binding actually produce the expected COMPLIANT / NON_COMPLIANT outcomes on a controlled resource.
 
 DAILY EC2 
 # ubuntu EC2 (not macbook)
