@@ -1,4 +1,4 @@
-# Storage CP — 59-row validation matrix
+# Storage CP — 59-row validation matrix 
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
 Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 11:49 EDT.  
