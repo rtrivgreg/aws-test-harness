@@ -16,9 +16,13 @@ CPs
 please resume https://github.com/rtrivgreg/aws-test-harness.git...
 
 source .venv/bin/activate
+
 export CATALOG_TABLE_NAME="y62db-config-rule-catalog"
+
 export CATALOG_GROUP="default"
+
 export AWS_REGION="us-east-1"
+
 export TEST_RUN_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-8)
 
 cd repost
