@@ -1,10 +1,10 @@
 CPs
 --------------------------------------------------------------------------------------------------------------
 ## CURRENT PUSH 8/28/2026 ACT 
-1) email aliases: aws-rtrivgreg@yahoo.com
+1) email aliases: aws-rtrivgreg@yahoo.com / dedicated account
 2) harness (cont)
 3) make 3 CPs. Test value change via amplify
-4) 4) activate consolidations and ids
+4) python activate consolidations and ids
  
 ## Conformance Pack Tooling
 - **aws-crud-rules-db** / DynamoDB catalog - system of record for rule curation (parameters, metadata and group bindings).
