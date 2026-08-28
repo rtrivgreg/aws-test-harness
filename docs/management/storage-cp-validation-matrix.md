@@ -4,7 +4,7 @@ Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).
 Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 11:49 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **15** · partial 1 · parked 2 · catalog-only **41** · total 59.
+**Counts:** live **17** · partial 1 · parked 2 · catalog-only **39** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
