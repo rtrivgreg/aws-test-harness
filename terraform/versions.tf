@@ -1,6 +1,14 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "s3" {
+    bucket         = "tfstate-aws-test-harness-418295699841"
+    key            = "aws-test-harness/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "tfstate-aws-test-harness-lock"
+    encrypt        = true
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -18,9 +26,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project       = "aws-config-test-harness"
-      ManagedBy     = "terraform"
-      # test-run-id is applied per-resource so different runs can coexist
+      Project   = "aws-config-test-harness"
+      ManagedBy = "terraform"
     }
   }
 }
