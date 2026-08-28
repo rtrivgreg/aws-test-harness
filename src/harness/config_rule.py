@@ -46,7 +46,9 @@ class ConfigRuleManager:
         return f"harness-{safe}-{self.test_run_id}"
 
     @dry_run_guard("PutConfigRule")
-    def put_managed_rule(self, spec: ManagedRuleSpec) -> str:
+    def put_managed_rule(
+        self, spec: ManagedRuleSpec, resource_id: Optional[str] = None
+    ) -> str:
         rule_name = self._rule_name_for_run(spec.rule_name)
         log(f"Putting managed rule {rule_name} (source={spec.source_identifier})")
 
@@ -64,7 +66,11 @@ class ConfigRuleManager:
         }
 
         if spec.resource_types:
-            config_rule["Scope"] = {"ComplianceResourceTypes": spec.resource_types}
+            scope: Dict[str, Any] = {"ComplianceResourceTypes": spec.resource_types}
+            if resource_id:
+                scope["ComplianceResourceId"] = resource_id
+                log(f"Scoping {rule_name} to {resource_id}")
+            config_rule["Scope"] = scope
 
         try:
             self.client.put_config_rule(ConfigRule=config_rule)
@@ -87,6 +93,13 @@ class ConfigRuleManager:
     def _rule_arn(self, rule_name: str) -> str:
         account = boto3.client("sts").get_caller_identity()["Account"]
         return f"arn:aws:config:{self.region}:{account}:config-rule/{rule_name}"
+
+    def describe_evaluation_status(self, rule_name: str) -> dict:
+        resp = self.client.describe_config_rule_evaluation_status(
+            ConfigRuleNames=[rule_name]
+        )
+        statuses = resp.get("ConfigRulesEvaluationStatus", [])
+        return statuses[0] if statuses else {}
 
     @dry_run_guard("DeleteConfigRule")
     def delete_rule(self, rule_name: str) -> None:
@@ -142,25 +155,31 @@ class ConfigRuleManager:
             log(f"Dry-run – skipping wait for evaluation of {rule_name}")
             return
 
-        resp = self.client.describe_config_rule_evaluation_status(
-            ConfigRuleNames=[rule_name]
-        )
-        statuses = resp.get("ConfigRulesEvaluationStatus", [])
-        if not statuses:
+        status = self.describe_evaluation_status(rule_name)
+        if not status:
             raise RuntimeError(f"No evaluation status returned for {rule_name}")
 
-        status = statuses[0]
-        last_success = status.get("LastSuccessfulEvaluationTime")
-        last_failed = status.get("LastFailedEvaluationTime")
+        last_eval = status.get("LastSuccessfulEvaluationTime")
+        last_inv = status.get("LastSuccessfulInvocationTime")
+        last_success = last_eval or last_inv
+        last_failed = status.get("LastFailedEvaluationTime") or status.get(
+            "LastFailedInvocationTime"
+        )
         last_error = status.get("LastErrorCode")
         last_msg = status.get("LastErrorMessage")
+        first_started = status.get("FirstEvaluationStarted")
 
         if last_success is None:
             log(
                 f"Waiting for evaluation of {rule_name} "
-                f"(last_failed={last_failed}, error={last_error}: {last_msg})"
+                f"(first_started={first_started}, last_failed={last_failed}, "
+                f"error={last_error}: {last_msg})"
             )
-            raise RuntimeError("Evaluation has not completed yet")
+            raise RuntimeError(
+                f"Evaluation has not completed yet for {rule_name} "
+                f"(first_started={first_started}, last_error={last_error}, "
+                f"last_msg={last_msg})"
+            )
 
         last_epoch = (
             last_success.timestamp()
@@ -176,4 +195,7 @@ class ConfigRuleManager:
                 "Evaluation timestamp is still older than the change we made"
             )
 
-        log(f"Evaluation completed for {rule_name} at {last_success}")
+        log(
+            f"Evaluation completed for {rule_name} at {last_success} "
+            f"(eval={last_eval}, inv={last_inv})"
+        )

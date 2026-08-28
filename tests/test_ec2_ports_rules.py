@@ -90,7 +90,7 @@ def test_restricted_common_ports(
     rule_name = None
     try:
         log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
-        rule_name = config_mgr.put_managed_rule(spec)
+        rule_name = config_mgr.put_managed_rule(spec, resource_id=sg)
 
         log(f"Opening TCP {PORT} 0.0.0.0/0 on {sg}")
         try:

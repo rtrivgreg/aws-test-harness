@@ -1,12 +1,11 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 06:20 EDT
+Last updated: 2026-08-28 06:40 EDT
 
 ## Locked live proofs
 
 **S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
-SSL, logging, public-read, public-write, ACL prohibited
-(`cfg-test-ef57dcf4-ca589695`).
+SSL, logging, public-read, public-write, ACL prohibited.
 
 **EBS** — ENCRYPTED_VOLUMES. Snapshot public-restorable partial.
 
@@ -20,14 +19,14 @@ SSL, logging, public-read, public-write, ACL prohibited
 
 ## In flight
 
-**restricted-common-ports / RESTRICTED_INCOMING_TRAFFIC** — FAILED 05:45 EDT.
-Config recorded SG `sg-07fa913d0e8961833` (CI OK) but rule published
-zero EvaluationResults (`Last results: []`). Recorder is
-EXCLUSION_BY_RESOURCE_TYPES (IAM only excluded), so discovery is fine.
+**restricted-common-ports** — last run 06:38 EDT failed after 12m:
+`RuntimeError: Evaluation has not completed yet`.
+`LastSuccessfulEvaluationTime` stayed empty. Recorder is fine; SG CIs exist.
+Likely first eval was sweeping every SG in the account (exclusion recorder).
 
-Fix on main: same eval path as locked SSH test — CI wait, then
-`start_evaluation` + `wait_for_evaluation`, then assert with
-`after_timestamp`. Do not swallow StartConfigRulesEvaluation errors.
+Fix on main: scope the rule to the test SG
+(`PutConfigRule.Scope.ComplianceResourceId`) and treat
+`LastSuccessfulInvocationTime` as completion.
 
 Re-run: `git pull && pytest tests/test_ec2_ports_rules.py -v -s`
 
