@@ -1,64 +1,53 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 18:35 EDT
+Last updated: 2026-08-28 18:50 EDT
 
 ## Score
 
-Portfolio live proofs: **26** (was 22 at 10:05 freeze).
-Storage CP: events, replication, and policy-grantee are live.
-Tonight on EC2: three S3 cycles PASSED. Do not apply Terraform drift.
+Portfolio live proofs: **27**.
+S3 family **15**. Do not apply Terraform drift.
 
-## Locked live proofs (26)
+## Locked live proofs (27)
 
-**S3 (14)** versioning, lifecycle, version-lifecycle, public-access,
+**S3 (15)** versioning, lifecycle, version-lifecycle, public-access,
 SSL, logging, public-read, public-write, ACL prohibited,
-S3_DEFAULT_ENCRYPTION_KMS, S3_BUCKET_TAGGED (HarnessProof),
-S3_EVENT_NOTIFICATIONS_ENABLED (SQS destination),
-S3_BUCKET_REPLICATION_ENABLED (test → logs bucket),
-S3_BUCKET_POLICY_GRANTEE_CHECK (`awsPrincipals` = this account;
-`Principal *` NC, no policy C).
+S3_DEFAULT_ENCRYPTION_KMS, S3_BUCKET_TAGGED,
+S3_EVENT_NOTIFICATIONS_ENABLED, S3_BUCKET_REPLICATION_ENABLED,
+S3_BUCKET_POLICY_GRANTEE_CHECK,
+S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED (`blacklistedActionPattern`).
 Bucket pair: `cfg-test-ef57dcf4-ca589695` /
 `cfg-test-logs-ef57dcf4-ca589695`.
 
 Tonight on `ip-10-0-1-190` (linux, run `ef57dcf4`):
 
-- `tests/test_s3_events_rules.py::test_s3_event_notifications_enabled` PASSED
-- `tests/test_s3_replication_rules.py::test_s3_bucket_replication_enabled` PASSED
-- `tests/test_s3_policy_grantee_rules.py::test_s3_bucket_policy_grantee_check` PASSED
+- events PASSED
+- replication PASSED
+- policy-grantee PASSED
+- blacklisted-actions PASSED
 
 **EBS (1)** ENCRYPTED_VOLUMES.
 
 **EFS (3)** encrypted, backups, access points.
 
 **CloudTrail (2)** log-file validation, CLOUD_TRAIL_ENCRYPTION_ENABLED
-(`cfg-ct-ef57dcf4`, `alias/harness`
-`arn:aws:kms:us-east-1:418295699841:key/45b99a45-cb78-47e5-9f70-0296ef21bee7`).
-Trail is **not** in Terraform state. Do not enable the module to “fix” that.
+(`cfg-ct-ef57dcf4`, `alias/harness`).
+Trail is **not** in Terraform state.
 
-**EC2 (3)** IMDSv2, restricted SSH, vpc-sg-port-restriction-check
-(`sg-07fa913d0e8961833`).
+**EC2 (3)** IMDSv2, restricted SSH, vpc-sg-port-restriction-check.
 
 **Backup (1)** min frequency/retention.
 
 ## Parked (unchanged)
 
-- RESTRICTED_INCOMING_TRAFFIC — invokes; INSUFFICIENT_DATA + empty evals.
-- S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED — modern S3 always SSE-S3.
-- FSx OpenZFS — fs AVAILABLE; Config inventory empty; destroyed.
-- EBS snapshot public-restorable — NC proven; C is account-scoped xfail.
+- RESTRICTED_INCOMING_TRAFFIC
+- S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+- FSx OpenZFS (destroyed)
+- EBS snapshot public-restorable COMPLIANT path
 
-## Terraform backend (2026-08-28)
+## Terraform backend
 
-Remote state owns **only** `module.s3_test_bucket[0].…` (nine addresses).
-
-- Bucket: `tfstate-aws-test-harness-418295699841`
-- Key: `aws-test-harness/terraform.tfstate`
-- Lock table: `tfstate-aws-test-harness-lock` (`860c7062-08b5-4029-8737-00e3cb12f213`)
-- Region: `us-east-1`
-- Runner: Ubuntu EC2 `ip-10-0-1-190` only. Mac does not run Terraform or live pytest.
-
-`terraform plan` (defaults, no `TF_VAR_enable_*`): 0 add, 0 destroy,
-in-place S3 tag/versioning drift. **Do not apply.**
+State owns only `module.s3_test_bucket[0].…`. Runner: EC2 only.
+Plan in-place S3 drift: **do not apply.**
 
 ## Next session on EC2
 
@@ -66,19 +55,10 @@ in-place S3 tag/versioning drift. **Do not apply.**
 cd ~/repost/aws-test-harness
 git pull
 source .venv/bin/activate
-export AWS_REGION=us-east-1
-export AWS_DEFAULT_REGION=us-east-1
-export CATALOG_TABLE_NAME=y62db-config-rule-catalog
-export CATALOG_GROUP=default
+export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
+export CATALOG_TABLE_NAME=y62db-config-rule-catalog CATALOG_GROUP=default
 export TEST_RUN_ID=ef57dcf4
-export TF_VAR_test_run_id=ef57dcf4
-export TF_VAR_aws_region=us-east-1
-export CLOUDTRAIL_KMS_KEY_ARN=arn:aws:kms:us-east-1:418295699841:key/45b99a45-cb78-47e5-9f70-0296ef21bee7
-
-aws sts get-caller-identity
-aws configservice describe-configuration-recorder-status --region us-east-1
-cd terraform && terraform plan -input=false && cd ..
+export TF_VAR_test_run_id=ef57dcf4 TF_VAR_aws_region=us-east-1
 ```
 
-Do not export `TF_VAR_enable_*`. Do not enable FSx. Do not rerun
-restricted-common-ports. Pytest from repo root, one live S3 rule at a time.
+Pytest from repo root, one S3 rule at a time. No `TF_VAR_enable_*`.
