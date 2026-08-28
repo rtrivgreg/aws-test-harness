@@ -1,21 +1,22 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 17:45 EDT
+Last updated: 2026-08-28 18:35 EDT
 
 ## Score
 
-Portfolio live proofs: **25** (was 22 at 10:05 freeze).
-Storage CP live rows: treat events + replication as live; matrix on disk may still lag.
-Session grade tonight: **A** for two clean S3 cycles on EC2.
-Do not apply Terraform drift. Next pytest only for a chosen catalog-only S3 rule on the same buckets.
+Portfolio live proofs: **26** (was 22 at 10:05 freeze).
+Storage CP: events, replication, and policy-grantee are live.
+Tonight on EC2: three S3 cycles PASSED. Do not apply Terraform drift.
 
-## Locked live proofs (25)
+## Locked live proofs (26)
 
-**S3 (13)** versioning, lifecycle, version-lifecycle, public-access,
+**S3 (14)** versioning, lifecycle, version-lifecycle, public-access,
 SSL, logging, public-read, public-write, ACL prohibited,
 S3_DEFAULT_ENCRYPTION_KMS, S3_BUCKET_TAGGED (HarnessProof),
 S3_EVENT_NOTIFICATIONS_ENABLED (SQS destination),
-S3_BUCKET_REPLICATION_ENABLED (test → logs bucket).
+S3_BUCKET_REPLICATION_ENABLED (test → logs bucket),
+S3_BUCKET_POLICY_GRANTEE_CHECK (`awsPrincipals` = this account;
+`Principal *` NC, no policy C).
 Bucket pair: `cfg-test-ef57dcf4-ca589695` /
 `cfg-test-logs-ef57dcf4-ca589695`.
 
@@ -23,6 +24,7 @@ Tonight on `ip-10-0-1-190` (linux, run `ef57dcf4`):
 
 - `tests/test_s3_events_rules.py::test_s3_event_notifications_enabled` PASSED
 - `tests/test_s3_replication_rules.py::test_s3_bucket_replication_enabled` PASSED
+- `tests/test_s3_policy_grantee_rules.py::test_s3_bucket_policy_grantee_check` PASSED
 
 **EBS (1)** ENCRYPTED_VOLUMES.
 
@@ -56,9 +58,7 @@ Remote state owns **only** `module.s3_test_bucket[0].…` (nine addresses).
 - Runner: Ubuntu EC2 `ip-10-0-1-190` only. Mac does not run Terraform or live pytest.
 
 `terraform plan` (defaults, no `TF_VAR_enable_*`): 0 add, 0 destroy,
-2 in-place on the test bucket (strip harness toggle tags; versioning
-Enabled → Suspended). That is pytest residue. **Do not apply.**
-Replication left versioning Enabled; a later apply would suspend it.
+in-place S3 tag/versioning drift. **Do not apply.**
 
 ## Next session on EC2
 
