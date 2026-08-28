@@ -1,6 +1,6 @@
 """S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED — policy allows banned action vs none.
 
-blacklistedActionPatterns includes s3:DeleteBucketPolicy.
+blacklistedActionPattern includes s3:DeleteBucketPolicy.
 A Principal=* Allow of that action is NON_COMPLIANT. No policy is COMPLIANT.
 """
 
@@ -24,7 +24,7 @@ def _spec() -> ManagedRuleSpec:
         rule_name="s3-bucket-blacklisted-actions-prohibited",
         source_identifier="S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED",
         input_parameters={
-            "blacklistedActionPatterns": "s3:DeleteBucketPolicy,s3:PutBucketPolicy"
+            "blacklistedActionPattern": "s3:DeleteBucketPolicy,s3:PutBucketPolicy"
         },
         resource_types=["AWS::S3::Bucket"],
         toggle_strategy="s3_blacklisted_actions",
