@@ -55,7 +55,8 @@ That is pytest toggle drift. Do not apply it.
 ```bash
 cd ~/repost/aws-test-harness
 git pull
-source .venv/bin/activate
+ec2 source .venv/bin/activate
+mac /Users/sunyanggregoire/code/.venv/bin/activate
 export AWS_REGION=us-east-1
 export AWS_DEFAULT_REGION=us-east-1
 export CATALOG_TABLE_NAME=y62db-config-rule-catalog
