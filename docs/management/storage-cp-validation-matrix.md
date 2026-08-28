@@ -43,13 +43,13 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | catalog-only | |
 | 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | |
 | 35 | s3-bucket-acl-prohibited | S3_BUCKET_ACL_PROHIBITED | S3 | live | |
-| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | catalog-only | |
+| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | live | |
 | 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | catalog-only | |
 | 38 | s3-bucket-default-lock-enabled | S3_BUCKET_DEFAULT_LOCK_ENABLED | S3 | catalog-only | Needs Object Lock at create |
 | 39 | s3-bucket-level-public-access-prohibited | S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED | S3 | live | |
 | 40 | s3-bucket-logging-enabled | S3_BUCKET_LOGGING_ENABLED | S3 | live | |
 | 41 | s3-bucket-mfa-delete-enabled | S3_BUCKET_MFA_DELETE_ENABLED | S3 | catalog-only | |
-| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | catalog-only | |
+| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | live | |
 | 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | catalog-only | |
 | 44 | s3-bucket-public-read-prohibited | S3_BUCKET_PUBLIC_READ_PROHIBITED | S3 | live | |
 | 45 | s3-bucket-public-write-prohibited | S3_BUCKET_PUBLIC_WRITE_PROHIBITED | S3 | live | |
