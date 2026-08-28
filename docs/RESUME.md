@@ -1,33 +1,42 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 07:41 EDT
+Last updated: 2026-08-28 07:43 EDT
 
-## Locked live proofs
+## Score
 
-**S3** — versioning, lifecycle, version-lifecycle, public-access prohibited,
+Grade this session: **B+** (ACL + ports replacement locked; RCP burned ~90 min).
+Portfolio live proofs: **20 / 26 = 77%**.
+
+## Locked live proofs (20)
+
+**S3 (9)** versioning, lifecycle, version-lifecycle, public-access,
 SSL, logging, public-read, public-write, ACL prohibited.
 
-**EBS** — ENCRYPTED_VOLUMES. Snapshot public-restorable partial.
+**EBS (1)** ENCRYPTED_VOLUMES. Snapshot public-restorable = partial, not counted.
 
-**EFS** — encrypted, backups, access points.
+**EFS (3)** encrypted, backups, access points.
 
-**CloudTrail** — log-file validation (KMS on other machine).
+**CloudTrail (1)** log-file validation.
 
-**EC2** — IMDSv2, restricted SSH, vpc-sg-port-restriction-check
-(3389 open/close on sg-07fa913d0e8961833, run ef57dcf4).
+**EC2 (3)** IMDSv2, restricted SSH, vpc-sg-port-restriction-check.
 
-**Backup** — min frequency/retention.
+**Backup (1)** min frequency/retention.
 
-## Next
+## This iteration (in progress)
 
-S3 default encryption (`s3_toggle.make_encryption_*` already exists).
+**S3_DEFAULT_ENCRYPTION_KMS** — AES256 = NC, aws:kms = C.
+`S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` stays parked: modern S3 is
+always SSE-S3; NC cannot be proven by delete_bucket_encryption.
 
-`pytest tests/test_s3_rules.py -k encryption -v -s`
-or add a dedicated test if that selector is empty.
+```bash
+git pull
+pytest tests/test_s3_kms_encryption_rules.py -v -s
+```
 
-## Parked
+## Parked (not in the 77% numerator)
 
-**RESTRICTED_INCOMING_TRAFFIC / restricted-common-ports** — INSUFFICIENT_DATA
-+ empty EvaluationResults after successful invocation. Skipped in pytest.
-
+RESTRICTED_INCOMING_TRAFFIC (INSUFFICIENT_DATA).
+S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED (platform default SSE).
 FSx (not discovered).
+EBS snapshot public-restorable (partial).
+CloudTrail KMS (other machine).
