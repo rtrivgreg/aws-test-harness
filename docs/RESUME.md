@@ -1,18 +1,21 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 07:43 EDT
+Last updated: 2026-08-28 08:00 EDT
 
 ## Score
 
-Grade this session: **B+** (ACL + ports replacement locked; RCP burned ~90 min).
-Portfolio live proofs: **20 / 26 = 77%**.
+Grade this iteration: **A** (KMS encryption locked first try).
+Portfolio live proofs: **21 / 26 = 81%**.
+Session grade: **A-**.
 
-## Locked live proofs (20)
+## Locked live proofs (21)
 
-**S3 (9)** versioning, lifecycle, version-lifecycle, public-access,
-SSL, logging, public-read, public-write, ACL prohibited.
+**S3 (10)** versioning, lifecycle, version-lifecycle, public-access,
+SSL, logging, public-read, public-write, ACL prohibited,
+S3_DEFAULT_ENCRYPTION_KMS (AES256 NC / aws:kms C on
+cfg-test-ef57dcf4-ca589695).
 
-**EBS (1)** ENCRYPTED_VOLUMES. Snapshot public-restorable = partial, not counted.
+**EBS (1)** ENCRYPTED_VOLUMES.
 
 **EFS (3)** encrypted, backups, access points.
 
@@ -22,21 +25,19 @@ SSL, logging, public-read, public-write, ACL prohibited.
 
 **Backup (1)** min frequency/retention.
 
-## This iteration (in progress)
+## Next iteration
 
-**S3_DEFAULT_ENCRYPTION_KMS** — AES256 = NC, aws:kms = C.
-`S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` stays parked: modern S3 is
-always SSE-S3; NC cannot be proven by delete_bucket_encryption.
+FSx OpenZFS copy-tags. Needs TF_VAR_enable_fsx_test, OpenZFS billable,
+Config discovery wait up to 20 min.
 
 ```bash
 git pull
-pytest tests/test_s3_kms_encryption_rules.py -v -s
+pytest tests/test_fsx_rules.py -v -s
 ```
 
-## Parked (not in the 77% numerator)
+## Parked
 
 RESTRICTED_INCOMING_TRAFFIC (INSUFFICIENT_DATA).
 S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED (platform default SSE).
-FSx (not discovered).
-EBS snapshot public-restorable (partial).
+EBS snapshot public-restorable (NC proven; C is account-scoped xfail).
 CloudTrail KMS (other machine).
