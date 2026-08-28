@@ -1,10 +1,10 @@
-# Storage CP — 59-row validation matrix 
+# Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 11:49 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 19:35 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **17** · partial 1 · parked 2 · catalog-only **39** · total 59.
+**Counts:** live **24** · partial 1 · parked 2 · catalog-only **32** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
@@ -39,27 +39,27 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 29 | fsx-openzfs-copy-tags-enabled | FSX_OPENZFS_COPY_TAGS_ENABLED | FSx | parked | Config never discovered FS |
 | 30 | fsx-resources-protected-by-backup-plan | FSX_RESOURCES_PROTECTED_BY_BACKUP_PLAN | FSx | catalog-only | |
 | 31 | fsx-windows-deployment-type-check | FSX_WINDOWS_DEPLOYMENT_TYPE_CHECK | FSx | catalog-only | |
-| 32 | s3-access-point-in-vpc-only | S3_ACCESS_POINT_IN_VPC_ONLY | S3 | live | |
-| 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | live | |
-| 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | |
+| 32 | s3-access-point-in-vpc-only | S3_ACCESS_POINT_IN_VPC_ONLY | S3 | live | 2026-08-28 Internet then default-VPC AP |
+| 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | live | 2026-08-28 recreate AP PAB off/on |
+| 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | Account-scoped |
 | 35 | s3-bucket-acl-prohibited | S3_BUCKET_ACL_PROHIBITED | S3 | live | |
-| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | catalog-only | |
-| 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | catalog-only | |
+| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | live | 2026-08-28 blacklistedActionPattern |
+| 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | catalog-only | Needs dest in another region |
 | 38 | s3-bucket-default-lock-enabled | S3_BUCKET_DEFAULT_LOCK_ENABLED | S3 | catalog-only | Needs Object Lock at create |
 | 39 | s3-bucket-level-public-access-prohibited | S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED | S3 | live | |
 | 40 | s3-bucket-logging-enabled | S3_BUCKET_LOGGING_ENABLED | S3 | live | |
 | 41 | s3-bucket-mfa-delete-enabled | S3_BUCKET_MFA_DELETE_ENABLED | S3 | catalog-only | |
-| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | catalog-only | |
-| 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | live | |
+| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | live | 2026-08-28 Principal * vs no policy |
+| 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | live | 2026-08-28 controlPolicy |
 | 44 | s3-bucket-public-read-prohibited | S3_BUCKET_PUBLIC_READ_PROHIBITED | S3 | live | |
 | 45 | s3-bucket-public-write-prohibited | S3_BUCKET_PUBLIC_WRITE_PROHIBITED | S3 | live | |
-| 46 | s3-bucket-replication-enabled | S3_BUCKET_REPLICATION_ENABLED | S3 | live | |
+| 46 | s3-bucket-replication-enabled | S3_BUCKET_REPLICATION_ENABLED | S3 | live | 2026-08-28 test → logs bucket |
 | 47 | s3-bucket-server-side-encryption-enabled | S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED | S3 | parked | Implicit SSE-S3 |
 | 48 | s3-bucket-ssl-requests-only | S3_BUCKET_SSL_REQUESTS_ONLY | S3 | live | |
 | 49 | s3-bucket-tagged | S3_BUCKET_TAGGED | S3 | live | 2026-08-28 HarnessProof |
 | 50 | s3-bucket-versioning-enabled | S3_BUCKET_VERSIONING_ENABLED | S3 | live | |
 | 51 | s3-default-encryption-kms | S3_DEFAULT_ENCRYPTION_KMS | S3 | live | |
-| 52 | s3-event-notifications-enabled | S3_EVENT_NOTIFICATIONS_ENABLED | S3 | live | Test ready on main |
+| 52 | s3-event-notifications-enabled | S3_EVENT_NOTIFICATIONS_ENABLED | S3 | live | 2026-08-28 SQS destination |
 | 53 | s3express-dir-bucket-lifecycle-rules-check | S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK | S3 | catalog-only | |
 | 54 | s3-last-backup-recovery-point-created | S3_LAST_BACKUP_RECOVERY_POINT_CREATED | S3 | catalog-only | |
 | 55 | s3-lifecycle-policy-check | S3_LIFECYCLE_POLICY_CHECK | S3 | live | |
