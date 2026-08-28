@@ -1,19 +1,20 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 19:46 EDT
+Last updated: 2026-08-28 19:52 EDT
 
 ## Score
 
-Portfolio live proofs: **31**.
-S3 family **19**. Storage CP matrix live **25** / 59.
+Portfolio live proofs: **32**.
+S3 family **20**. Storage CP matrix live **26** / 59.
 Do not apply Terraform drift.
 
 ## Locked tonight (EC2, run ef57dcf4)
 
 Events, replication, grantee, blacklisted-actions, AP PAB, AP VPC-only,
-policy-not-more-permissive, cross-region replication (us-west-2 dest deleted).
+policy-not-more-permissive, cross-region replication, default object lock.
 
 Bucket pair: `cfg-test-ef57dcf4-ca589695` / `cfg-test-logs-ef57dcf4-ca589695`.
+Lock bucket `cfg-test-lock-ca589695` should be deleted.
 
 ## Parked
 
