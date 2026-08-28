@@ -39,8 +39,8 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 29 | fsx-openzfs-copy-tags-enabled | FSX_OPENZFS_COPY_TAGS_ENABLED | FSx | parked | Config never discovered FS |
 | 30 | fsx-resources-protected-by-backup-plan | FSX_RESOURCES_PROTECTED_BY_BACKUP_PLAN | FSx | catalog-only | |
 | 31 | fsx-windows-deployment-type-check | FSX_WINDOWS_DEPLOYMENT_TYPE_CHECK | FSx | catalog-only | |
-| 32 | s3-access-point-in-vpc-only | S3_ACCESS_POINT_IN_VPC_ONLY | S3 | catalog-only | |
-| 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | catalog-only | |
+| 32 | s3-access-point-in-vpc-only | S3_ACCESS_POINT_IN_VPC_ONLY | S3 | live | |
+| 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | live | |
 | 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | |
 | 35 | s3-bucket-acl-prohibited | S3_BUCKET_ACL_PROHIBITED | S3 | live | |
 | 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | catalog-only | |
@@ -50,7 +50,7 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 40 | s3-bucket-logging-enabled | S3_BUCKET_LOGGING_ENABLED | S3 | live | |
 | 41 | s3-bucket-mfa-delete-enabled | S3_BUCKET_MFA_DELETE_ENABLED | S3 | catalog-only | |
 | 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | catalog-only | |
-| 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | catalog-only | |
+| 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | live | |
 | 44 | s3-bucket-public-read-prohibited | S3_BUCKET_PUBLIC_READ_PROHIBITED | S3 | live | |
 | 45 | s3-bucket-public-write-prohibited | S3_BUCKET_PUBLIC_WRITE_PROHIBITED | S3 | live | |
 | 46 | s3-bucket-replication-enabled | S3_BUCKET_REPLICATION_ENABLED | S3 | live | |
