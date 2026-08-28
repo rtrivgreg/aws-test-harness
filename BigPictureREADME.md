@@ -1,6 +1,6 @@
 CPs
 --------------------------------------------------------------------------------------------------------------
-## CURRENT PUSH 8/28/2026 ACT 
+## Current Push 8/28/2026 ACT 
 1) email aliases: aws-rtrivgreg@yahoo.com / dedicated account
 2) harness (cont)
 3) make 3 CPs. Test value change via amplify
@@ -12,7 +12,7 @@ CPs
 - **aws-compliance-collector**  - forensics
 - **aws-test-harness** = validation evidence TT that proves the parameters chosen in a binding actually produce the expected COMPLIANT / NON_COMPLIANT outcomes on a controlled resource.
 
-## DAILY EC2 / MacBook Ramp-up
+## Daily EC2 / MacBook Ramp-up
 please resume https://github.com/rtrivgreg/aws-test-harness.git...
 
 source .venv/bin/activate
