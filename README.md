@@ -1,5 +1,5 @@
 # AWS Config Rule Test Harness
-Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
+A Framework for systematically validating AWS Config **managed rules** (and later full conformance packs) using a minimal, Terraform-provisioned resource that can be programmatically toggled between COMPLIANT and NON_COMPLIANT states.
 
 ## Design Principles
 
@@ -10,7 +10,8 @@ Framework for systematically validating AWS Config **managed rules** (and later 
 - **Dry-run mode** supported throughout.
 - Heavily commented so the pattern is clear when extending to EBS, EFS, EC2, CloudTrail, Backup, etc.
 
-## High-level flow (per managed rule)
+<details>
+  <summary>High-level flow (per managed rule)</summary>
 
 1. Terraform provisions (or re-uses) a minimal shared S3 bucket tagged with the current `test-run-id`.
 2. For each rule under test:
@@ -24,6 +25,8 @@ Framework for systematically validating AWS Config **managed rules** (and later 
    - (Optional) Force an out-of-scope condition → assert `NOT_APPLICABLE`.
    - Delete the Config rule.
 3. Terraform can destroy the test resources when the run is finished (or leave them for inspection).
+
+</details>
 
 ## Repository layout
 
@@ -58,9 +61,9 @@ aws-test-harness/
     ├── test_s3_rules.py               # first vertical slice
     └── helpers.py
 ```
-
-## Prerequisites
-
+<details>
+  <summary>Prerequisites</summary>
+  
 - AWS credentials with permissions to:
   - Manage Config rules (`config:PutConfigRule`, `config:DeleteConfigRule`, `config:StartConfigRulesEvaluation`, `config:GetComplianceDetailsByConfigRule`, `config:DescribeConfigRuleEvaluationStatus`, …)
   - Read the DynamoDB catalog table
@@ -69,9 +72,12 @@ aws-test-harness/
 - Python >= 3.11
 - `pytest`
 
-## Quick start (after cloning)
+</details>
 
-```bash
+<details>
+  <summary>Quick start (after cloning)</summary>
+  
+  ```bash
 # 1. Python deps
 python -m venv .venv
 source .venv/bin/activate
@@ -93,13 +99,18 @@ pytest tests/test_s3_rules.py -v --dry-run
 # 5. Real run
 pytest tests/test_s3_rules.py -v
 ```
+</details>
 
-## Extending to other families
-
+<details>
+   
+  <summary>Extending to other families</summary>
+  
 1. Add a new Terraform module under `terraform/modules/` (ebs_test_volume, efs_test_filesystem, …).
 2. Add a corresponding `*_toggle.py` that knows how to drive the resource COMPLIANT ↔ NON_COMPLIANT.
 3. Register the new resource type in the catalog interface and in `conftest.py`.
 4. Write a new `test_<family>_rules.py` that re-uses the same fixtures and flow.
+
+</details>
 
 ## Safety notes
 
