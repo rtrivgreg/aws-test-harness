@@ -77,6 +77,17 @@ class S3Toggle:
             OwnershipControls={"Rules": [{"ObjectOwnership": setting}]},
         )
 
+    def _put_encryption(self, algorithm: str) -> None:
+        log(f"Setting default encryption={algorithm} on {self.bucket_name}")
+        self.s3.put_bucket_encryption(
+            Bucket=self.bucket_name,
+            ServerSideEncryptionConfiguration={
+                "Rules": [{
+                    "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": algorithm}
+                }]
+            },
+        )
+
     @dry_run_guard("Enable S3 versioning")
     def make_versioning_compliant(self) -> None:
         log(f"Enabling versioning on {self.bucket_name}")
@@ -195,7 +206,6 @@ class S3Toggle:
 
     @dry_run_guard("Enable ACLs and grant public-read")
     def make_acl_noncompliant(self) -> None:
-        # Ownership change alone stays COMPLIANT. The rule wants user ACL grants.
         self.make_public_access_noncompliant()
         self._set_ownership("BucketOwnerPreferred")
         log(f"Putting canned public-read ACL on {self.bucket_name}")
@@ -215,16 +225,8 @@ class S3Toggle:
 
     @dry_run_guard("Enable S3 SSE-S3")
     def make_encryption_compliant(self) -> None:
-        log(f"Enabling AES256 encryption on {self.bucket_name}")
-        self.s3.put_bucket_encryption(
-            Bucket=self.bucket_name,
-            ServerSideEncryptionConfiguration={
-                "Rules": [{
-                    "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
-                }]
-            },
-        )
-        self._nudge_config_recording("encryption-enabled")
+        self._put_encryption("AES256")
+        self._nudge_config_recording("encryption-aes256")
 
     @dry_run_guard("Remove S3 encryption configuration")
     def make_encryption_noncompliant(self) -> None:
@@ -237,6 +239,16 @@ class S3Toggle:
             else:
                 raise
         self._nudge_config_recording("encryption-removed")
+
+    @dry_run_guard("Set default encryption to AES256 (not KMS)")
+    def make_kms_encryption_noncompliant(self) -> None:
+        self._put_encryption("AES256")
+        self._nudge_config_recording("encryption-aes256")
+
+    @dry_run_guard("Set default encryption to aws:kms")
+    def make_kms_encryption_compliant(self) -> None:
+        self._put_encryption("aws:kms")
+        self._nudge_config_recording("encryption-kms")
 
     def apply_strategy(self, strategy: str, compliant: bool) -> None:
         mapping = {
@@ -265,6 +277,9 @@ class S3Toggle:
             ),
             "s3_encryption": (
                 self.make_encryption_compliant if compliant else self.make_encryption_noncompliant
+            ),
+            "s3_kms_encryption": (
+                self.make_kms_encryption_compliant if compliant else self.make_kms_encryption_noncompliant
             ),
             "s3_generic": (
                 self.make_versioning_compliant if compliant else self.make_versioning_noncompliant
