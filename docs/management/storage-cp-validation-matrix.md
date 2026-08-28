@@ -43,23 +43,23 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 33 | s3-access-point-public-access-blocks | S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS | S3 | catalog-only | |
 | 34 | s3-account-level-public-access-blocks-periodic | S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC | S3 | catalog-only | |
 | 35 | s3-bucket-acl-prohibited | S3_BUCKET_ACL_PROHIBITED | S3 | live | |
-| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | live | |
+| 36 | s3-bucket-blacklisted-actions-prohibited | S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED | S3 | catalog-only | |
 | 37 | s3-bucket-cross-region-replication-enabled | S3_BUCKET_CROSS_REGION_REPLICATION_ENABLED | S3 | catalog-only | |
 | 38 | s3-bucket-default-lock-enabled | S3_BUCKET_DEFAULT_LOCK_ENABLED | S3 | catalog-only | Needs Object Lock at create |
 | 39 | s3-bucket-level-public-access-prohibited | S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED | S3 | live | |
 | 40 | s3-bucket-logging-enabled | S3_BUCKET_LOGGING_ENABLED | S3 | live | |
 | 41 | s3-bucket-mfa-delete-enabled | S3_BUCKET_MFA_DELETE_ENABLED | S3 | catalog-only | |
-| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | live | |
+| 42 | s3-bucket-policy-grantee-check | S3_BUCKET_POLICY_GRANTEE_CHECK | S3 | catalog-only | |
 | 43 | s3-bucket-policy-not-more-permissive | S3_BUCKET_POLICY_NOT_MORE_PERMISSIVE | S3 | catalog-only | |
 | 44 | s3-bucket-public-read-prohibited | S3_BUCKET_PUBLIC_READ_PROHIBITED | S3 | live | |
 | 45 | s3-bucket-public-write-prohibited | S3_BUCKET_PUBLIC_WRITE_PROHIBITED | S3 | live | |
-| 46 | s3-bucket-replication-enabled | S3_BUCKET_REPLICATION_ENABLED | S3 | catalog-only | |
+| 46 | s3-bucket-replication-enabled | S3_BUCKET_REPLICATION_ENABLED | S3 | live | |
 | 47 | s3-bucket-server-side-encryption-enabled | S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED | S3 | parked | Implicit SSE-S3 |
 | 48 | s3-bucket-ssl-requests-only | S3_BUCKET_SSL_REQUESTS_ONLY | S3 | live | |
 | 49 | s3-bucket-tagged | S3_BUCKET_TAGGED | S3 | live | 2026-08-28 HarnessProof |
 | 50 | s3-bucket-versioning-enabled | S3_BUCKET_VERSIONING_ENABLED | S3 | live | |
 | 51 | s3-default-encryption-kms | S3_DEFAULT_ENCRYPTION_KMS | S3 | live | |
-| 52 | s3-event-notifications-enabled | S3_EVENT_NOTIFICATIONS_ENABLED | S3 | catalog-only | Test ready on main |
+| 52 | s3-event-notifications-enabled | S3_EVENT_NOTIFICATIONS_ENABLED | S3 | live | Test ready on main |
 | 53 | s3express-dir-bucket-lifecycle-rules-check | S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK | S3 | catalog-only | |
 | 54 | s3-last-backup-recovery-point-created | S3_LAST_BACKUP_RECOVERY_POINT_CREATED | S3 | catalog-only | |
 | 55 | s3-lifecycle-policy-check | S3_LIFECYCLE_POLICY_CHECK | S3 | live | |
