@@ -1,6 +1,6 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 07:02 EDT
+Last updated: 2026-08-28 07:22 EDT
 
 ## Locked live proofs
 
@@ -19,18 +19,15 @@ SSL, logging, public-read, public-write, ACL prohibited.
 
 ## In flight
 
-**restricted-common-ports** — 07:00 EDT: wait_for_evaluation passed
-(invocation time present) but GetComplianceDetails stayed `[]` for 10m
-with ComplianceResourceId scope. That scope is now removed.
-
-Also set MaximumExecutionFrequency=One_Hour, param blockedPorts=3389,
-and dump rule/status/compliance summary on empty results.
+**vpc-sg-port-restriction-check** — replacement for restricted-common-ports.
+Same SG, same 3389 open/close toggle.
 
 Re-run: `git pull && pytest tests/test_ec2_ports_rules.py -v -s`
 
-If DEBUG lines show ComplianceType INSUFFICIENT_DATA or no resources
-in scope, park this identifier and use vpc-sg-port-restriction-check.
-
 ## Parked
+
+**RESTRICTED_INCOMING_TRAFFIC / restricted-common-ports** — four live
+misses 2026-08-28. Rule invokes; GetComplianceDetails stays empty.
+Skipped in pytest. Do not spend another 15-minute cycle on it.
 
 FSx (not discovered), S3 default encryption.
