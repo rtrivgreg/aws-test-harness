@@ -1,40 +1,37 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-28 18:50 EDT
+Last updated: 2026-08-28 19:12 EDT
 
 ## Score
 
-Portfolio live proofs: **27**.
-S3 family **15**. Do not apply Terraform drift.
+Portfolio live proofs: **28** (plus policy-not-more-permissive if that run PASSED).
+S3 family **16**. Do not apply Terraform drift.
 
-## Locked live proofs (27)
+## Locked live proofs (28)
 
-**S3 (15)** versioning, lifecycle, version-lifecycle, public-access,
+**S3 (16)** versioning, lifecycle, version-lifecycle, public-access,
 SSL, logging, public-read, public-write, ACL prohibited,
 S3_DEFAULT_ENCRYPTION_KMS, S3_BUCKET_TAGGED,
 S3_EVENT_NOTIFICATIONS_ENABLED, S3_BUCKET_REPLICATION_ENABLED,
 S3_BUCKET_POLICY_GRANTEE_CHECK,
-S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED (`blacklistedActionPattern`).
+S3_BUCKET_BLACKLISTED_ACTIONS_PROHIBITED,
+S3_ACCESS_POINT_PUBLIC_ACCESS_BLOCKS (temp AP `harness-ap-ca589695`,
+recreate toggle; AP deleted after pass).
 Bucket pair: `cfg-test-ef57dcf4-ca589695` /
 `cfg-test-logs-ef57dcf4-ca589695`.
 
-Tonight on `ip-10-0-1-190` (linux, run `ef57dcf4`):
+Tonight on `ip-10-0-1-190` (run `ef57dcf4`):
 
 - events PASSED
 - replication PASSED
 - policy-grantee PASSED
 - blacklisted-actions PASSED
+- access-point PAB PASSED
 
 **EBS (1)** ENCRYPTED_VOLUMES.
-
 **EFS (3)** encrypted, backups, access points.
-
-**CloudTrail (2)** log-file validation, CLOUD_TRAIL_ENCRYPTION_ENABLED
-(`cfg-ct-ef57dcf4`, `alias/harness`).
-Trail is **not** in Terraform state.
-
+**CloudTrail (2)** log-file validation + KMS (`cfg-ct-ef57dcf4`).
 **EC2 (3)** IMDSv2, restricted SSH, vpc-sg-port-restriction-check.
-
 **Backup (1)** min frequency/retention.
 
 ## Parked (unchanged)
@@ -46,8 +43,7 @@ Trail is **not** in Terraform state.
 
 ## Terraform backend
 
-State owns only `module.s3_test_bucket[0].…`. Runner: EC2 only.
-Plan in-place S3 drift: **do not apply.**
+State owns only `module.s3_test_bucket[0].…`. EC2 only. Do not apply.
 
 ## Next session on EC2
 
@@ -60,5 +56,3 @@ export CATALOG_TABLE_NAME=y62db-config-rule-catalog CATALOG_GROUP=default
 export TEST_RUN_ID=ef57dcf4
 export TF_VAR_test_run_id=ef57dcf4 TF_VAR_aws_region=us-east-1
 ```
-
-Pytest from repo root, one S3 rule at a time. No `TF_VAR_enable_*`.
