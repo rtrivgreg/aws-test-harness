@@ -89,6 +89,7 @@ aws-test-harness/
   <summary>Quick start (after cloning)</summary>
 
   <HR>
+  
   ```bash
 # 1. Python deps
 python -m venv .venv
@@ -116,6 +117,8 @@ pytest tests/test_s3_rules.py -v
 <details>
    
   <summary>Extending to other families</summary>
+
+  <HR>
   
 1. Add a new Terraform module under `terraform/modules/` (ebs_test_volume, efs_test_filesystem, …).
 2. Add a corresponding `*_toggle.py` that knows how to drive the resource COMPLIANT ↔ NON_COMPLIANT.
