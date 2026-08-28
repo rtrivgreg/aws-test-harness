@@ -91,12 +91,6 @@ def test_restricted_common_ports(
     try:
         log(f"===== Testing rule: {spec.rule_name} ({spec.source_identifier}) =====")
         rule_name = config_mgr.put_managed_rule(spec)
-        # Let the new rule exist before the first on-demand eval.
-        time.sleep(10)
-        try:
-            config_mgr.start_evaluation(rule_name)
-        except Exception as exc:
-            log(f"initial start_evaluation ignored: {exc}", style="yellow")
 
         log(f"Opening TCP {PORT} 0.0.0.0/0 on {sg}")
         try:
@@ -117,15 +111,12 @@ def test_restricted_common_ports(
             resource_id=sg, after_timestamp=change_ts,
             resource_type="AWS::EC2::SecurityGroup",
         )
-        try:
-            config_mgr.start_evaluation(rule_name)
-        except Exception as exc:
-            log(f"start_evaluation ignored: {exc}", style="yellow")
-        # Do not require after_ts on first NC: periodic rules often record
-        # the first result with a clock that loses to our toggle timestamp.
+        eval_ts = time.time()
+        config_mgr.start_evaluation(rule_name)
+        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
         nc = compliance.wait_for_resource_result(
             rule_name=rule_name, resource_id=sg, expected="NON_COMPLIANT",
-            config_mgr=config_mgr, after_timestamp=None, timeout_seconds=600,
+            config_mgr=config_mgr, after_timestamp=eval_ts, timeout_seconds=600,
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
@@ -149,10 +140,8 @@ def test_restricted_common_ports(
             resource_type="AWS::EC2::SecurityGroup",
         )
         eval_ts = time.time()
-        try:
-            config_mgr.start_evaluation(rule_name)
-        except Exception as exc:
-            log(f"start_evaluation ignored: {exc}", style="yellow")
+        config_mgr.start_evaluation(rule_name)
+        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
         c = compliance.wait_for_resource_result(
             rule_name=rule_name, resource_id=sg, expected="COMPLIANT",
             config_mgr=config_mgr, after_timestamp=eval_ts, timeout_seconds=600,
