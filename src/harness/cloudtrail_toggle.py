@@ -1,4 +1,4 @@
-"""Toggle CloudTrail log file validation and KMS encryption."""
+"""Toggle CloudTrail log file validation, KMS, and S3 data events."""
 
 from __future__ import annotations
 
@@ -27,13 +27,16 @@ class CloudTrailToggle:
         if not self.trail_arn:
             return
         log(f"Nudging Config via CloudTrail tag ({reason})")
-        self.ct.add_tags(
-            ResourceId=self.trail_arn,
-            TagsList=[
-                {"Key": "harness-toggle-ts", "Value": str(int(time.time()))},
-                {"Key": "harness-last-toggle", "Value": reason[:128]},
-            ],
-        )
+        try:
+            self.ct.add_tags(
+                ResourceId=self.trail_arn,
+                TagsList=[
+                    {"Key": "harness-toggle-ts", "Value": str(int(time.time()))},
+                    {"Key": "harness-last-toggle", "Value": reason[:128]},
+                ],
+            )
+        except ClientError as exc:
+            log(f"add_tags nudge: {exc}", style="yellow")
 
     @dry_run_guard("Update CloudTrail log file validation")
     def set_log_file_validation(self, enabled: bool) -> None:
@@ -52,10 +55,37 @@ class CloudTrailToggle:
             self._nudge("kms-on")
             return
         log(f"Clear trail KmsKeyId on {self.trail_name}")
-        # Empty string is the documented way to remove SSE-KMS from a trail.
         try:
             self.ct.update_trail(Name=self.trail_name, KmsKeyId="")
         except ClientError as exc:
             log(f"update_trail empty KmsKeyId failed: {exc}", style="yellow")
             raise
         self._nudge("kms-off")
+
+    def get_event_selectors(self) -> list:
+        resp = self.ct.get_event_selectors(TrailName=self.trail_name)
+        return resp.get("EventSelectors") or []
+
+    def set_s3_write_data_events(self, enabled: bool) -> None:
+        if enabled:
+            log(f"Enable all-bucket S3 write data events on {self.trail_name}")
+            selectors = [{
+                "ReadWriteType": "WriteOnly",
+                "IncludeManagementEvents": True,
+                "DataResources": [{
+                    "Type": "AWS::S3::Object",
+                    "Values": ["arn:aws:s3"],
+                }],
+            }]
+        else:
+            log(f"Clear S3 data events on {self.trail_name}")
+            selectors = [{
+                "ReadWriteType": "All",
+                "IncludeManagementEvents": True,
+                "DataResources": [],
+            }]
+        self.ct.put_event_selectors(
+            TrailName=self.trail_name,
+            EventSelectors=selectors,
+        )
+        self._nudge("s3-write-data-on" if enabled else "s3-write-data-off")
