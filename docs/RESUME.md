@@ -1,31 +1,26 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 15:24 EDT
+Last updated: 2026-08-29 15:56 EDT
 
 ## Score
 
-Storage CP live **37 / 59**. Partial 1. Parked 6. Catalog-only 15.
+Storage CP live **37 / 59**. Partial 1. Parked 7. Catalog-only 14.
 Do not apply Terraform drift.
 
 ## Locked after the break
 
-- `S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — 127s; live bucket off-plan NC / on-plan C
-  - bucket `cfg-test-ef57dcf4-ca589695`
-  - plan `b6cddd41-80ff-41e1-88da-7fccc3bab8fc` deleted; bucket kept
+- `S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — 127s
+- `EFS_IN_BACKUP_PLAN` / `EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` earlier
 
-## Locked earlier today (boto3)
+## Parked this afternoon — EBS_IN_BACKUP_PLAN
 
-- `EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE`
-- `EBS_OPTIMIZED_INSTANCE` (c3.xlarge + t3.nano)
-- `EFS_IN_BACKUP_PLAN`
-- `EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN`
+Rule ACTIVE and emitting results, but only for leftover volumes:
 
-## Parked
+- `vol-02fb846068d4f8138` NON_COMPLIANT
+- `vol-060b48b8621c69275` NON_COMPLIANT
 
-RP encrypted; EBS protected-by-plan; snapshot BPA stale CI;
+Harness volumes never appeared: `vol-09c267fad47044590`, then `vol-035c6b510dbfd949f`.
+Three evals / 300s+. Do not rerun. EFS/S3 twins of this family are live.
+
+Also parked earlier: RP encrypted; EBS protected-by-plan; snapshot BPA stale CI;
 RCP; SSE-S3; FSx OpenZFS; snapshot C path.
-
-## Next least-bad
-
-`EBS_IN_BACKUP_PLAN` — same boto3 volume+plan pattern as EFS_IN_BACKUP_PLAN.
-EBS *protected-by-plan* is still parked; this identifier may differ.
