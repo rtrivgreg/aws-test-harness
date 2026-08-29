@@ -1,43 +1,31 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 14:42 EDT
+Last updated: 2026-08-29 15:24 EDT
 
 ## Score
 
-Storage CP live **36 / 59**. Partial 1. Parked 6. Catalog-only 16.
+Storage CP live **37 / 59**. Partial 1. Parked 6. Catalog-only 15.
 Do not apply Terraform drift.
 
-## Runner disk
+## Locked after the break
 
-```bash
-export TMPDIR=/mnt/scratchpad/pytest_tmp
-export TF_PLUGIN_CACHE_DIR=/mnt/scratchpad/terraform/plugin_cache
-export TF_DATA_DIR=/mnt/scratchpad/terraform/.terraform
-pytest -o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache
-```
+- `S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — 127s; live bucket off-plan NC / on-plan C
+  - bucket `cfg-test-ef57dcf4-ca589695`
+  - plan `b6cddd41-80ff-41e1-88da-7fccc3bab8fc` deleted; bucket kept
 
-## Locked this afternoon (boto3, no Terraform apply)
+## Locked earlier today (boto3)
 
-- `EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE` — 167s
-- `EBS_OPTIMIZED_INSTANCE` — 210s; c3.xlarge NC + t3.nano C
-- `EFS_IN_BACKUP_PLAN` — 256s
-- `EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — 241s; resourceId accepted
-  - fs `fs-05c790fc2da4c6f25` plan `a4e45987-544e-438a-b527-88083abd5990`
-  - EBS twin of this identifier remains parked INSUFFICIENT_DATA
+- `EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE`
+- `EBS_OPTIMIZED_INSTANCE` (c3.xlarge + t3.nano)
+- `EFS_IN_BACKUP_PLAN`
+- `EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN`
 
 ## Parked
 
 RP encrypted; EBS protected-by-plan; snapshot BPA stale CI;
 RCP; SSE-S3; FSx OpenZFS; snapshot C path.
 
-## EFS in the 59
+## Next least-bad
 
-Live: encrypted, CT encrypted, automatic backups, both AP rules,
-mount-target public, in-backup-plan, protected-by-plan.
-No remaining EFS row in this pack except coverage that is already done.
-
-## Next
-
-Do not apply Terraform. Remaining catalog-only are long-shots
-(MFA delete, S3 Express, air-gapped vault, restore-time, last-RP,
-spot-fleet CT, other FSx, EBS-in-backup-plan).
+`EBS_IN_BACKUP_PLAN` — same boto3 volume+plan pattern as EFS_IN_BACKUP_PLAN.
+EBS *protected-by-plan* is still parked; this identifier may differ.
