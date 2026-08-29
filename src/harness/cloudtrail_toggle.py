@@ -66,11 +66,11 @@ class CloudTrailToggle:
         resp = self.ct.get_event_selectors(TrailName=self.trail_name)
         return resp.get("EventSelectors") or []
 
-    def set_s3_write_data_events(self, enabled: bool) -> None:
+    def set_s3_data_events(self, enabled: bool, read_write: str) -> None:
         if enabled:
-            log(f"Enable all-bucket S3 write data events on {self.trail_name}")
+            log(f"Enable all-bucket S3 {read_write} data events on {self.trail_name}")
             selectors = [{
-                "ReadWriteType": "WriteOnly",
+                "ReadWriteType": read_write,
                 "IncludeManagementEvents": True,
                 "DataResources": [{
                     "Type": "AWS::S3::Object",
@@ -88,4 +88,10 @@ class CloudTrailToggle:
             TrailName=self.trail_name,
             EventSelectors=selectors,
         )
-        self._nudge("s3-write-data-on" if enabled else "s3-write-data-off")
+        self._nudge(f"s3-{read_write}-data-{'on' if enabled else 'off'}")
+
+    def set_s3_write_data_events(self, enabled: bool) -> None:
+        self.set_s3_data_events(enabled, "WriteOnly")
+
+    def set_s3_read_data_events(self, enabled: bool) -> None:
+        self.set_s3_data_events(enabled, "ReadOnly")
