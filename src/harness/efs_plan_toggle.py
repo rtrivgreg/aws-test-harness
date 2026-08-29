@@ -1,4 +1,4 @@
-"""Throwaway EFS + backup plan for EFS_IN_BACKUP_PLAN. No Terraform."""
+"""Throwaway EFS + backup plan for EFS backup-plan coverage rules. No Terraform."""
 
 from __future__ import annotations
 
@@ -13,9 +13,15 @@ from harness.tags import PURPOSE_TAG_KEY, PURPOSE_TAG_VALUE, TEST_RUN_ID_TAG_KEY
 
 
 class EfsPlanProtectHarness:
-    def __init__(self, test_run_id: str, region: Optional[str] = None):
+    def __init__(
+        self,
+        test_run_id: str,
+        region: Optional[str] = None,
+        prefix: str = "cfg-efs-plan",
+    ):
         self.test_run_id = test_run_id
         self.region = region or "us-east-1"
+        self.prefix = prefix
         self.efs = boto3.client("efs", region_name=self.region)
         self.backup = boto3.client("backup", region_name=self.region)
         self.iam = boto3.client("iam")
@@ -24,7 +30,7 @@ class EfsPlanProtectHarness:
         self.fs_id: Optional[str] = None
         self.plan_id: Optional[str] = None
         self.selection_id: Optional[str] = None
-        self.vault_name = f"cfg-efs-plan-vault-{test_run_id}"
+        self.vault_name = f"{prefix}-vault-{test_run_id}"
 
     def _tags(self, name: str) -> list[dict]:
         return [
@@ -47,7 +53,7 @@ class EfsPlanProtectHarness:
         raise TimeoutError(f"{fs_id} not available")
 
     def create_filesystem(self) -> str:
-        name = f"cfg-efs-plan-{self.test_run_id}"
+        name = f"{self.prefix}-{self.test_run_id}"
         created = self.efs.create_file_system(
             CreationToken=name,
             Encrypted=True,
@@ -90,7 +96,7 @@ class EfsPlanProtectHarness:
         vault = self.ensure_vault()
         created = self.backup.create_backup_plan(
             BackupPlan={
-                "BackupPlanName": f"cfg-efs-plan-{self.test_run_id}",
+                "BackupPlanName": f"{self.prefix}-{self.test_run_id}",
                 "Rules": [
                     {
                         "RuleName": "harness-daily",
@@ -110,7 +116,7 @@ class EfsPlanProtectHarness:
         sel = self.backup.create_backup_selection(
             BackupPlanId=self.plan_id,
             BackupSelection={
-                "SelectionName": f"cfg-efs-plan-sel-{self.test_run_id}",
+                "SelectionName": f"{self.prefix}-sel-{self.test_run_id}",
                 "IamRoleArn": self._role_arn(),
                 "Resources": [self.fs_arn()],
             },
