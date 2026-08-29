@@ -1,19 +1,26 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 17:17 EDT
+Last updated: 2026-08-29 17:49 EDT
 
 ## Score
 
-Storage CP live **37 / 59**. Partial 1. Parked 8. Catalog-only 13.
+Storage CP live **38 / 59**. Partial 1. Parked 8. Catalog-only 12.
 Do not apply Terraform drift.
 
-## Parked this hour — EBS_LAST_BACKUP_RECOVERY_POINT_CREATED
+## Locked this evening
 
-`resourceId=vol-0e2d17d11bf705c4c` accepted. Rule ACTIVE. EvaluationResults = [].
-300s. Same recorder gap as RecoveryPoint / EBS protected-by-plan / EBS_IN_BACKUP_PLAN.
-Do not rerun.
+- `S3_LAST_BACKUP_RECOVERY_POINT_CREATED` — live across two evals on `cfg-test-ef57dcf4-ca589695`
+  - NC before any Backup job
+  - C after on-demand S3 Backup job (versioning Enabled for the job only)
+  - bucket versioning confirmed **Suspended** again 2026-08-29 17:49
+  - later single-process rerun stayed C because the RP was still inside the 1h window; do not rerun tonight
 
-## Live today (boto3)
+## Locked earlier today (boto3)
 
-EFS mount-target, EBS optimized, EFS in-plan, EFS protected-by-plan,
-S3 protected-by-plan.
+EFS mount-target public, EBS optimized (c3.xlarge + t3.nano),
+EFS in-backup-plan, EFS protected-by-plan, S3 protected-by-plan.
+
+## Parked today
+
+EBS_IN_BACKUP_PLAN (stale vols only); EBS_LAST_BACKUP_RECOVERY_POINT_CREATED (empty results);
+plus earlier RP encrypted, EBS protected-by-plan, snapshot BPA, RCP, SSE-S3, FSx OpenZFS, snapshot C.
