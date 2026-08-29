@@ -1,13 +1,17 @@
 """Throwaway EFS pair + mount targets for EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE.
 
-Does not flip MapPublicIpOnLaunch on existing subnets. Uses one subnet
-that already assigns public IPs (NC) and one that does not (C).
+Does not flip MapPublicIpOnLaunch on existing subnets. Prefers the instance
+VPC over the account default VPC. If that VPC has no private subnet, creates
+a tagged /28 with MapPublicIpOnLaunch=false and deletes it on cleanup.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import time
+import urllib.error
+import urllib.request
 from typing import Optional
 
 import boto3
@@ -15,6 +19,25 @@ from botocore.exceptions import ClientError
 
 from harness.dry_run import log
 from harness.tags import PURPOSE_TAG_KEY, PURPOSE_TAG_VALUE, TEST_RUN_ID_TAG_KEY
+
+
+def _imds(path: str) -> Optional[str]:
+    try:
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            method="PUT",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            token = resp.read().decode()
+        req = urllib.request.Request(
+            f"http://169.254.169.254/latest/meta-data/{path}",
+            headers={"X-aws-ec2-metadata-token": token},
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.read().decode()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None
 
 
 class EfsMountTargetHarness:
@@ -31,6 +54,7 @@ class EfsMountTargetHarness:
         self.vpc_id: Optional[str] = None
         self.public_subnet_id: Optional[str] = None
         self.private_subnet_id: Optional[str] = None
+        self.created_private_subnet_id: Optional[str] = None
 
     def _tags(self, name: str) -> list[dict]:
         return [
@@ -40,8 +64,52 @@ class EfsMountTargetHarness:
             {"Key": "ManagedBy", "Value": "aws-config-test-harness"},
         ]
 
+    def _instance_vpc_id(self) -> Optional[str]:
+        mac = _imds("mac")
+        if not mac:
+            return None
+        return _imds(f"network/interfaces/macs/{mac}/vpc-id")
+
+    def _free_slash28(self, vpc_cidr: str, used: list[str]) -> str:
+        vpc = ipaddress.ip_network(vpc_cidr)
+        taken = [ipaddress.ip_network(c) for c in used]
+        for candidate in vpc.subnets(new_prefix=28):
+            if any(candidate.overlaps(t) for t in taken):
+                continue
+            return str(candidate)
+        raise RuntimeError(f"No free /28 in {vpc_cidr}")
+
+    def _create_private_subnet(self, vpc_id: str, subnets: list[dict]) -> str:
+        vpc = self.ec2.describe_vpcs(VpcIds=[vpc_id])["Vpcs"][0]
+        cidr = vpc["CidrBlock"]
+        used = [s["CidrBlock"] for s in subnets]
+        block = self._free_slash28(cidr, used)
+        az = subnets[0]["AvailabilityZone"] if subnets else None
+        kwargs = {
+            "VpcId": vpc_id,
+            "CidrBlock": block,
+            "TagSpecifications": [
+                {
+                    "ResourceType": "subnet",
+                    "Tags": self._tags(f"cfg-efs-mt-priv-{self.test_run_id}"),
+                }
+            ],
+        }
+        if az:
+            kwargs["AvailabilityZone"] = az
+        created = self.ec2.create_subnet(**kwargs)
+        subnet_id = created["Subnet"]["SubnetId"]
+        self.ec2.modify_subnet_attribute(
+            SubnetId=subnet_id, MapPublicIpOnLaunch={"Value": False}
+        )
+        self.created_private_subnet_id = subnet_id
+        log(f"Created private subnet {subnet_id} {block} in {vpc_id}")
+        return subnet_id
+
     def _pick_vpc_and_subnets(self) -> None:
         vpc_id = os.environ.get("HARNESS_VPC_ID", "").strip()
+        if not vpc_id:
+            vpc_id = self._instance_vpc_id() or ""
         if not vpc_id:
             defaults = self.ec2.describe_vpcs(
                 Filters=[{"Name": "is-default", "Values": ["true"]}]
@@ -59,14 +127,16 @@ class EfsMountTargetHarness:
         ).get("Subnets", [])
         public = [s for s in subnets if s.get("MapPublicIpOnLaunch")]
         private = [s for s in subnets if not s.get("MapPublicIpOnLaunch")]
-        if not public or not private:
+        if not public:
             raise RuntimeError(
-                f"Need one MapPublicIpOnLaunch=true and one false in {vpc_id}. "
-                f"public={len(public)} private={len(private)}. "
-                "Set HARNESS_VPC_ID if the default VPC is wrong."
+                f"No MapPublicIpOnLaunch=true subnet in {vpc_id}. "
+                "Set HARNESS_VPC_ID to a VPC that already has one."
             )
         self.public_subnet_id = public[0]["SubnetId"]
-        self.private_subnet_id = private[0]["SubnetId"]
+        if private:
+            self.private_subnet_id = private[0]["SubnetId"]
+        else:
+            self.private_subnet_id = self._create_private_subnet(vpc_id, subnets)
         log(
             f"VPC {vpc_id} public_subnet={self.public_subnet_id} "
             f"private_subnet={self.private_subnet_id}"
@@ -204,3 +274,12 @@ class EfsMountTargetHarness:
                 log(f"Deleted SG {self.sg_id}")
             except ClientError as exc:
                 log(f"delete_security_group {self.sg_id}: {exc}", style="yellow")
+        if self.created_private_subnet_id:
+            try:
+                self.ec2.delete_subnet(SubnetId=self.created_private_subnet_id)
+                log(f"Deleted private subnet {self.created_private_subnet_id}")
+            except ClientError as exc:
+                log(
+                    f"delete_subnet {self.created_private_subnet_id}: {exc}",
+                    style="yellow",
+                )
