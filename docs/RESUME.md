@@ -1,38 +1,29 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 07:46 EDT
+Last updated: 2026-08-29 08:18 EDT
 
 ## Score
 
-Storage CP live **27 / 59**. Partial 1. Parked **5**. Catalog-only 26.
+Storage CP live **28 / 59**. Partial 1. Parked 5. Catalog-only 25.
 Do not apply Terraform drift.
 
 ## Locked this morning
 
-`EC2_LAUNCH_TEMPLATES_EBS_VOLUME_ENCRYPTED` — 275s NC+C.
+- `EC2_LAUNCH_TEMPLATES_EBS_VOLUME_ENCRYPTED` — 275s
+- `EFS_FILESYSTEM_CT_ENCRYPTED` — throwaway unenc/enc FS pair, 188s
 
 ## Parked this morning
 
-- `BACKUP_RECOVERY_POINT_ENCRYPTED` — RecoveryPoint inventory []
-- `EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — INSUFFICIENT_DATA, results []
-- `EBS_SNAPSHOT_BLOCK_PUBLIC_ACCESS` — type exists; CI captured **2025-10-11**;
-  disable/enable BPA does not emit a new CI. Do not rerun.
+- `BACKUP_RECOVERY_POINT_ENCRYPTED` — RecoveryPoint []
+- `EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — INSUFFICIENT_DATA []
+- `EBS_SNAPSHOT_BLOCK_PUBLIC_ACCESS` — stale CI 2025-10-11
 
 Also: RCP; implicit SSE-S3; FSx OpenZFS; snapshot C path.
 
-## Cleanup
-
-```bash
-aws configservice delete-config-rule --region us-east-1 \
-  --config-rule-name harness-ebs-snapshot-block-public-access-ef57dcf4
-aws ec2 get-snapshot-block-public-access-state --region us-east-1
-# expect block-all-sharing
-```
-
 ## Next
 
-`EFS_FILESYSTEM_CT_ENCRYPTED` (throwaway FS + CMK, boto3 only) if continuing.
-Not Backup coverage. Not SnapshotBlockPublicAccess.
+Still change-triggered, non-coverage. Remaining storage rows are mostly
+Backup-family, FSx, account-scoped, or Express One Zone.
 
 ```bash
 cd ~/repost/aws-test-harness && git pull && source .venv/bin/activate
