@@ -1,13 +1,7 @@
-"""CLOUDTRAIL_ALL_WRITE_S3_DATA_EVENT_CHECK — no S3 data events NC, all-write C.
-
-Periodic AWS::::Account. Only use cfg-ct-* / harness trails. Never touch
-kinesis-video-events or other account trails. Create a throwaway multi-Region
-trail on the live logs bucket if no harness trail exists.
-"""
+"""CLOUDTRAIL_ALL_WRITE_S3_DATA_EVENT_CHECK — no S3 data events NC, all-write C."""
 
 from __future__ import annotations
 
-import json
 import os
 import time
 
@@ -15,6 +9,7 @@ import boto3
 import pytest
 
 from harness.catalog import ManagedRuleSpec
+from harness.cloudtrail_s3 import ensure_harness_trail
 from harness.cloudtrail_toggle import CloudTrailToggle
 from harness.compliance import ComplianceChecker
 from harness.config_rule import ConfigRuleManager
@@ -40,48 +35,6 @@ def _dump(config_mgr: ConfigRuleManager, compliance: ComplianceChecker, rule_nam
     log(f"EvaluationResults ({len(rows)}): {rows}")
 
 
-def _harness_trails(ct, test_run_id: str) -> list[dict]:
-    trails = ct.describe_trails().get("trailList") or []
-    out = []
-    for t in trails:
-        name = t.get("Name") or ""
-        if name.startswith("cfg-ct-") or test_run_id in name:
-            out.append(t)
-    return out
-
-
-def _ensure_trail(region: str, test_run_id: str, logs_bucket: str) -> tuple[dict, bool]:
-    ct = boto3.client("cloudtrail", region_name=region)
-    existing = _harness_trails(ct, test_run_id)
-    if existing:
-        trail = existing[0]
-        log(f"Using harness trail {trail.get('Name')} multi={trail.get('IsMultiRegionTrail')}")
-        return trail, False
-    if not logs_bucket:
-        raise RuntimeError("No harness trail and S3_TEST_BUCKET unset")
-    account = boto3.client("sts").get_caller_identity()["Account"]
-    name = f"cfg-ct-s3w-{test_run_id}"
-    s3 = boto3.client("s3", region_name=region)
-    prefix_bucket = logs_bucket if "logs" in logs_bucket else f"cfg-test-logs-{test_run_id}-ca589695"
-    # Prefer explicit logs bucket if the live test bucket was passed.
-    bucket = os.environ.get("S3_LOGS_BUCKET") or (
-        logs_bucket.replace("cfg-test-", "cfg-test-logs-", 1)
-        if logs_bucket.startswith("cfg-test-") and "logs" not in logs_bucket.split("cfg-test-")[-1][:6]
-        else logs_bucket
-    )
-    log(f"Creating throwaway trail {name} -> s3://{bucket}")
-    created = ct.create_trail(
-        Name=name,
-        S3BucketName=bucket,
-        IsMultiRegionTrail=True,
-        EnableLogFileValidation=True,
-    )
-    ct.start_logging(Name=name)
-    created["Name"] = name
-    created["IsMultiRegionTrail"] = True
-    return created, True
-
-
 @pytest.mark.cloudtrail
 @pytest.mark.s3
 @pytest.mark.slow
@@ -92,18 +45,9 @@ def test_cloudtrail_all_write_s3_data_event_check(
     aws_region: str,
 ) -> None:
     account = boto3.client("sts").get_caller_identity()["Account"]
-    logs_bucket = os.environ.get("S3_TEST_BUCKET", "")
-    trail, created = _ensure_trail(aws_region, test_run_id, logs_bucket)
-    name = trail["Name"]
-    if not trail.get("IsMultiRegionTrail"):
-        if created:
-            boto3.client("cloudtrail", region_name=aws_region).delete_trail(Name=name)
-        pytest.skip("Need a multi-Region trail for this identifier")
-    toggle = CloudTrailToggle(
-        trail_name=name,
-        trail_arn=trail.get("TrailARN"),
-        region=aws_region,
-    )
+    test_bucket = os.environ.get("S3_TEST_BUCKET", "")
+    name, arn, created = ensure_harness_trail(aws_region, test_run_id, test_bucket)
+    toggle = CloudTrailToggle(trail_name=name, trail_arn=arn, region=aws_region)
     spec = _spec()
     rule_name = None
     passed = False
@@ -156,11 +100,14 @@ def test_cloudtrail_all_write_s3_data_event_check(
                 log(f"delete_trail: {exc}", style="yellow")
         elif original is not None:
             try:
-                ct.put_event_selectors(TrailName=name, EventSelectors=original or [{
-                    "ReadWriteType": "All",
-                    "IncludeManagementEvents": True,
-                    "DataResources": [],
-                }])
+                ct.put_event_selectors(
+                    TrailName=name,
+                    EventSelectors=original or [{
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": True,
+                        "DataResources": [],
+                    }],
+                )
                 log("Restored original event selectors")
             except Exception as exc:
                 log(f"restore selectors: {exc}", style="yellow")
