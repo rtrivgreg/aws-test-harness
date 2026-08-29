@@ -1,8 +1,4 @@
-"""S3_LAST_BACKUP_RECOVERY_POINT_CREATED — live bucket, no RP then on-demand job.
-
-Periodic. resourceId = bucket name. Do not delete the bucket.
-If the first eval is empty, park — do not wait for a backup job.
-"""
+"""S3_LAST_BACKUP_RECOVERY_POINT_CREATED — delete stale RPs, NC, then new job C."""
 
 from __future__ import annotations
 
@@ -57,8 +53,8 @@ def test_s3_last_backup_recovery_point_created(
     )
     rule_name = None
     passed = False
-    started_job = False
     try:
+        harness.delete_existing_recovery_points()
         spec = _spec(s3_test_bucket)
         log(f"===== Testing rule: {spec.rule_name} bucket={s3_test_bucket} =====")
         rule_name = config_mgr.put_managed_rule(
@@ -84,7 +80,6 @@ def test_s3_last_backup_recovery_point_created(
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
-        started_job = True
         harness.start_and_wait()
         time.sleep(15)
         eval_ts = time.time() - 30
@@ -106,8 +101,7 @@ def test_s3_last_backup_recovery_point_created(
         keep = os.environ.get("HARNESS_KEEP_ON_FAIL") == "1" and not passed
         if keep:
             log(
-                f"KEEP on fail: rule={rule_name} bucket={s3_test_bucket} "
-                f"started_job={started_job} rp={harness.rp_arn}",
+                f"KEEP on fail: rule={rule_name} bucket={s3_test_bucket} rp={harness.rp_arn}",
                 style="yellow",
             )
         else:

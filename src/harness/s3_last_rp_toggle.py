@@ -1,8 +1,4 @@
-"""On-demand Backup job for the live S3 test bucket. Does not delete the bucket.
-
-AWS Backup requires versioning Enabled. This account's last versioning toggle
-left the bucket Suspended. Enable for the job, restore Suspended in cleanup.
-"""
+"""On-demand Backup job for the live S3 test bucket. Does not delete the bucket."""
 
 from __future__ import annotations
 
@@ -50,6 +46,37 @@ class S3LastRpHarness:
     def bucket_arn(self) -> str:
         return f"arn:aws:s3:::{self.bucket_name}"
 
+    def delete_existing_recovery_points(self) -> None:
+        token = None
+        deleted = 0
+        while True:
+            kwargs = {"ResourceArn": self.bucket_arn(), "MaxResults": 100}
+            if token:
+                kwargs["NextToken"] = token
+            try:
+                resp = self.backup.list_recovery_points_by_resource(**kwargs)
+            except ClientError as exc:
+                log(f"list_recovery_points_by_resource: {exc}", style="yellow")
+                return
+            for rp in resp.get("RecoveryPoints", []):
+                arn = rp.get("RecoveryPointArn")
+                vault = rp.get("BackupVaultName")
+                if not arn:
+                    continue
+                try:
+                    args = {"RecoveryPointArn": arn}
+                    if vault:
+                        args["BackupVaultName"] = vault
+                    self.backup.delete_recovery_point(**args)
+                    deleted += 1
+                    log(f"Deleted existing RP {arn}")
+                except ClientError as exc:
+                    log(f"delete_recovery_point {arn}: {exc}", style="yellow")
+            token = resp.get("NextToken")
+            if not token:
+                break
+        log(f"Deleted {deleted} existing S3 recovery points")
+
     def enable_versioning(self) -> None:
         self.s3.put_bucket_versioning(
             Bucket=self.bucket_name,
@@ -87,9 +114,7 @@ class S3LastRpHarness:
             code = exc.response.get("Error", {}).get("Code", "")
             if code != "EntityAlreadyExists":
                 raise
-            self.role_arn = (
-                f"arn:aws:iam::{self.account}:role/{self.role_name}"
-            )
+            self.role_arn = f"arn:aws:iam::{self.account}:role/{self.role_name}"
             log(f"Reusing IAM role {self.role_arn}")
         self.iam.attach_role_policy(RoleName=self.role_name, PolicyArn=S3_BACKUP_POLICY)
         time.sleep(8)
@@ -121,7 +146,7 @@ class S3LastRpHarness:
             BackupVaultName=vault,
             ResourceArn=self.bucket_arn(),
             IamRoleArn=role,
-            IdempotencyToken=f"s3-lastrp-{self.test_run_id}-3",
+            IdempotencyToken=f"s3-lastrp-{self.test_run_id}-4",
             Lifecycle={"DeleteAfterDays": 1},
         )
         job_id = job["BackupJobId"]
