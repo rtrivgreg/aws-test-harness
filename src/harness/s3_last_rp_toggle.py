@@ -1,7 +1,7 @@
 """On-demand Backup job for the live S3 test bucket. Does not delete the bucket.
 
-AWSBackupDefaultServiceRole cannot StartBackupJob on S3. Creates a tagged
-throwaway role with AWSBackupServiceRolePolicyForS3Backup and deletes it.
+AWS Backup requires versioning Enabled. This account's last versioning toggle
+left the bucket Suspended. Enable for the job, restore Suspended in cleanup.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ class S3LastRpHarness:
         self.bucket_name = bucket_name
         self.region = region or "us-east-1"
         self.backup = boto3.client("backup", region_name=self.region)
+        self.s3 = boto3.client("s3", region_name=self.region)
         self.iam = boto3.client("iam")
         self.sts = boto3.client("sts")
         self.account = self.sts.get_caller_identity()["Account"]
@@ -44,9 +45,28 @@ class S3LastRpHarness:
         self.role_name = f"cfg-s3-backup-{test_run_id}"[:64]
         self.role_arn: Optional[str] = None
         self.vault_name = f"cfg-s3-lastrp-vault-{test_run_id}"
+        self._versioning_touched = False
 
     def bucket_arn(self) -> str:
         return f"arn:aws:s3:::{self.bucket_name}"
+
+    def enable_versioning(self) -> None:
+        self.s3.put_bucket_versioning(
+            Bucket=self.bucket_name,
+            VersioningConfiguration={"Status": "Enabled"},
+        )
+        self._versioning_touched = True
+        log(f"Enabled versioning on {self.bucket_name} for S3 Backup")
+
+    def restore_versioning_suspended(self) -> None:
+        if not self._versioning_touched:
+            return
+        self.s3.put_bucket_versioning(
+            Bucket=self.bucket_name,
+            VersioningConfiguration={"Status": "Suspended"},
+        )
+        log(f"Restored versioning Suspended on {self.bucket_name}")
+        self._versioning_touched = False
 
     def ensure_role(self) -> str:
         if self.role_arn:
@@ -72,7 +92,7 @@ class S3LastRpHarness:
             )
             log(f"Reusing IAM role {self.role_arn}")
         self.iam.attach_role_policy(RoleName=self.role_name, PolicyArn=S3_BACKUP_POLICY)
-        time.sleep(12)
+        time.sleep(8)
         return self.role_arn
 
     def ensure_vault(self) -> str:
@@ -94,13 +114,14 @@ class S3LastRpHarness:
         return self.vault_name
 
     def start_and_wait(self, timeout_seconds: int = 900) -> str:
+        self.enable_versioning()
         vault = self.ensure_vault()
         role = self.ensure_role()
         job = self.backup.start_backup_job(
             BackupVaultName=vault,
             ResourceArn=self.bucket_arn(),
             IamRoleArn=role,
-            IdempotencyToken=f"s3-lastrp-{self.test_run_id}-2",
+            IdempotencyToken=f"s3-lastrp-{self.test_run_id}-3",
             Lifecycle={"DeleteAfterDays": 1},
         )
         job_id = job["BackupJobId"]
@@ -131,6 +152,10 @@ class S3LastRpHarness:
                 log(f"Deleted recovery point {self.rp_arn}")
             except ClientError as exc:
                 log(f"delete_recovery_point: {exc}", style="yellow")
+        try:
+            self.restore_versioning_suspended()
+        except ClientError as exc:
+            log(f"restore versioning: {exc}", style="yellow")
         try:
             self.iam.detach_role_policy(
                 RoleName=self.role_name, PolicyArn=S3_BACKUP_POLICY
