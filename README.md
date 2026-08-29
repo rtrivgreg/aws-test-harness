@@ -3,7 +3,7 @@
 Framework for validating AWS Config **managed rules** with a Terraform-provisioned
 resource toggled between COMPLIANT and NON_COMPLIANT.
 
-**Storage CP live proofs (2026-08-29): 26 / 59.** Details in `docs/RESUME.md`.
+**Storage CP live proofs (2026-08-29): 32 / 59.** Details in `docs/RESUME.md`.
 
 ## Design principles
 
@@ -18,10 +18,13 @@ resource toggled between COMPLIANT and NON_COMPLIANT.
 
 Locked: S3 family (versioning, lifecycle, logging, public access, SSL, ACL,
 KMS default encryption, events, replication, CRR, grantee, blacklisted actions,
-AP PAB, AP VPC-only, policy-not-more-permissive, object lock, tagged),
-EBS encrypted volumes, EFS (encrypted / backups / access points),
-CloudTrail (log-file validation + KMS), EC2 (IMDSv2, restricted SSH,
-vpc-sg-port-restriction-check), Backup min frequency/retention.
+AP PAB, AP VPC-only, policy-not-more-permissive, object lock, tagged,
+account-level PAB periodic),
+EBS encrypted volumes + encryption-by-default + launch-template EBS encrypted,
+EFS (encrypted / backups / access points / CT encrypted),
+CloudTrail (log-file validation + KMS + all-read/all-write S3 data events),
+EC2 (IMDSv2, restricted SSH, vpc-sg-port-restriction-check),
+Backup min frequency/retention.
 
 Parked on purpose (do not rerun):
 
@@ -29,7 +32,9 @@ Parked on purpose (do not rerun):
 - `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` — SSE-S3 is implicit on modern buckets
 - FSx OpenZFS — filesystem AVAILABLE; Config never discovered it
 - `BACKUP_RECOVERY_POINT_ENCRYPTED` — EBS jobs COMPLETED; Config never discovered `AWS::Backup::RecoveryPoint`
+- `EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — INSUFFICIENT_DATA
 - EBS snapshot public-restorable COMPLIANT — account-scoped periodic rule
+- EBS snapshot block-public-access — stale CI
 
 ## Terraform state
 
@@ -54,9 +59,9 @@ backend "s3" {
 ## Daily resume (EC2)
 
 ```bash
+cd ~/repost/aws-test-harness
 git stash
 git pull
-cd ~/repost/aws-test-harness
 source .venv/bin/activate
 export AWS_REGION=us-east-1
 export AWS_DEFAULT_REGION=us-east-1
@@ -65,11 +70,16 @@ export CATALOG_GROUP=default
 export TEST_RUN_ID=ef57dcf4
 export S3_TEST_BUCKET=cfg-test-ef57dcf4-ca589695
 export CLOUDTRAIL_KMS_KEY_ARN=arn:aws:kms:us-east-1:418295699841:key/45b99a45-cb78-47e5-9f70-0296ef21bee7
+export TMPDIR=/mnt/scratchpad/pytest_tmp
+export TF_PLUGIN_CACHE_DIR=/mnt/scratchpad/terraform/plugin_cache
+export TF_DATA_DIR=/mnt/scratchpad/terraform/.terraform
 
 aws configservice describe-configuration-recorder-status --region us-east-1
+df -h / /mnt/scratchpad
 ```
 
 Run pytest from the **repo root**, not from `terraform/`.
+Use `--cache-dir=/mnt/scratchpad/pytest_tmp/.pytest_cache` so cache stays off root.
 
 ## High-level flow (per managed rule)
 
