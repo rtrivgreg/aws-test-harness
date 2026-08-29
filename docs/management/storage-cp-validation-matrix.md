@@ -1,10 +1,10 @@
 # Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 13:00 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 13:30 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **32** · partial 1 · parked 6 · catalog-only **20** · total 59.
+**Counts:** live **33** · partial 1 · parked 6 · catalog-only **19** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
@@ -31,7 +31,7 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 21 | efs-encrypted-check | EFS_ENCRYPTED_CHECK | EFS | live | |
 | 22 | efs-filesystem-ct-encrypted | EFS_FILESYSTEM_CT_ENCRYPTED | EFS | live | 2026-08-29 |
 | 23 | efs-in-backup-plan | EFS_IN_BACKUP_PLAN | EFS | catalog-only | Coverage family; do not rerun this recorder |
-| 24 | efs-mount-target-public-accessible | EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE | EFS | catalog-only | |
+| 24 | efs-mount-target-public-accessible | EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE | EFS | live | 2026-08-29 167s; public MT NC / private MT C; throwaway /28 cleaned |
 | 25 | efs-resources-protected-by-backup-plan | EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN | EFS | catalog-only | Coverage family; do not rerun this recorder |
 | 26 | encrypted-volumes | ENCRYPTED_VOLUMES | EBS | live | |
 | 27 | fsx-lustre-copy-tags-to-backups | FSX_LUSTRE_COPY_TAGS_TO_BACKUPS | FSx | catalog-only | |
