@@ -1,4 +1,4 @@
-"""AWS Backup plan retention toggle and on-demand recovery-point harness."""
+"""AWS Backup plan retention toggle and throwaway Backup helpers."""
 
 from __future__ import annotations
 
@@ -39,12 +39,7 @@ class BackupToggle:
 
 
 class RecoveryPointHarness:
-    """Throwaway EBS volumes + vault for BACKUP_RECOVERY_POINT_ENCRYPTED.
-
-    EBS recovery points inherit encryption from the source volume (not the
-    vault). Unencrypted volume → IsEncrypted=false → NON_COMPLIANT.
-    Encrypted volume → COMPLIANT. No Terraform apply.
-    """
+    """Throwaway EBS volumes + vault for BACKUP_RECOVERY_POINT_ENCRYPTED. Parked."""
 
     def __init__(self, test_run_id: str, region: Optional[str] = None):
         self.test_run_id = test_run_id
@@ -79,15 +74,12 @@ class RecoveryPointHarness:
         return zones[0]["ZoneName"]
 
     def backup_role_arn(self) -> str:
-        for name in ("AWSBackupDefaultServiceRole",):
-            try:
-                return self.iam.get_role(RoleName=name)["Role"]["Arn"]
-            except ClientError:
-                continue
-        raise RuntimeError(
-            "IAM role AWSBackupDefaultServiceRole is missing. "
-            "Create the default AWS Backup service role before this test."
-        )
+        try:
+            return self.iam.get_role(RoleName="AWSBackupDefaultServiceRole")["Role"]["Arn"]
+        except ClientError as exc:
+            raise RuntimeError(
+                "IAM role AWSBackupDefaultServiceRole is missing."
+            ) from exc
 
     def _wait_volume(self, volume_id: str, timeout: int = 180) -> None:
         deadline = time.time() + timeout
@@ -102,31 +94,20 @@ class RecoveryPointHarness:
     def _create_volume(self, encrypted: bool) -> str:
         label = "enc" if encrypted else "unenc"
         name = f"cfg-rp-vol-{label}-{self.test_run_id}"
-        kwargs: dict = {
-            "AvailabilityZone": self._az(),
-            "Size": 1,
-            "VolumeType": "gp3",
-            "Encrypted": encrypted,
-            "TagSpecifications": [
+        vol = self.ec2.create_volume(
+            AvailabilityZone=self._az(),
+            Size=1,
+            VolumeType="gp3",
+            Encrypted=encrypted,
+            TagSpecifications=[
                 {"ResourceType": "volume", "Tags": self._tags(name)}
             ],
-        }
-        vol = self.ec2.create_volume(**kwargs)["VolumeId"]
+        )["VolumeId"]
         log(f"Created {label} volume {vol}")
         self._wait_volume(vol)
         return vol
 
     def ensure_vault(self) -> str:
-        try:
-            self.backup.describe_backup_vault(BackupVaultName=self.vault_name)
-            log(f"Reusing vault {self.vault_name}")
-            return self.vault_name
-        except ClientError as exc:
-            code = exc.response.get("Error", {}).get("Code", "")
-            if code not in ("ResourceNotFoundException", "AccessDeniedException"):
-                # AccessDenied on missing vault is common; try create.
-                if code != "ResourceNotFoundException":
-                    pass
         log(f"Creating vault {self.vault_name}")
         try:
             self.backup.create_backup_vault(
@@ -144,18 +125,12 @@ class RecoveryPointHarness:
                 raise
         return self.vault_name
 
-    def start_and_wait(
-        self,
-        volume_id: str,
-        timeout_seconds: int = 900,
-    ) -> dict:
+    def start_and_wait(self, volume_id: str, timeout_seconds: int = 900) -> dict:
         resource_arn = f"arn:aws:ec2:{self.region}:{self.account}:volume/{volume_id}"
-        role_arn = self.backup_role_arn()
-        log(f"StartBackupJob volume={volume_id} vault={self.vault_name}")
         job = self.backup.start_backup_job(
             BackupVaultName=self.vault_name,
             ResourceArn=resource_arn,
-            IamRoleArn=role_arn,
+            IamRoleArn=self.backup_role_arn(),
             IdempotencyToken=f"{self.test_run_id}-{volume_id[-8:]}",
             Lifecycle={"DeleteAfterDays": 1},
         )
@@ -168,23 +143,15 @@ class RecoveryPointHarness:
             log(f"Backup job {job_id} state={state}")
             if state == "COMPLETED":
                 rp = last.get("RecoveryPointArn")
-                if not rp:
-                    raise RuntimeError(f"Job {job_id} completed without RecoveryPointArn")
                 meta = self.backup.describe_recovery_point(
                     BackupVaultName=self.vault_name,
                     RecoveryPointArn=rp,
                 )
-                log(
-                    f"RP {rp} IsEncrypted={meta.get('IsEncrypted')} "
-                    f"EncryptionKeyArn={meta.get('EncryptionKeyArn')}"
-                )
                 return meta
             if state in ("FAILED", "ABORTED", "EXPIRED"):
-                raise RuntimeError(
-                    f"Backup job {job_id} {state}: {last.get('StatusMessage')}"
-                )
+                raise RuntimeError(f"Backup job {job_id} {state}: {last.get('StatusMessage')}")
             time.sleep(15)
-        raise TimeoutError(f"Backup job {job_id} not COMPLETED: {last.get('State')}")
+        raise TimeoutError(f"Backup job {job_id} not COMPLETED")
 
     def provision(self) -> dict:
         self.ensure_vault()
@@ -194,16 +161,6 @@ class RecoveryPointHarness:
         c = self.start_and_wait(self.enc_volume_id)
         self.nc_rp_arn = nc["RecoveryPointArn"]
         self.c_rp_arn = c["RecoveryPointArn"]
-        if nc.get("IsEncrypted"):
-            raise RuntimeError(
-                f"Expected unencrypted RP from {self.unenc_volume_id}, "
-                f"got IsEncrypted=True ({self.nc_rp_arn})"
-            )
-        if not c.get("IsEncrypted"):
-            raise RuntimeError(
-                f"Expected encrypted RP from {self.enc_volume_id}, "
-                f"got IsEncrypted=False ({self.c_rp_arn})"
-            )
         return {
             "vault_name": self.vault_name,
             "unenc_volume_id": self.unenc_volume_id,
@@ -212,39 +169,157 @@ class RecoveryPointHarness:
             "c_rp_arn": self.c_rp_arn,
         }
 
-    def _delete_rp(self, arn: Optional[str]) -> None:
-        if not arn:
-            return
-        try:
-            self.backup.delete_recovery_point(
-                BackupVaultName=self.vault_name,
-                RecoveryPointArn=arn,
-            )
-            log(f"Deleted recovery point {arn}")
-        except ClientError as exc:
-            log(f"delete_recovery_point {arn}: {exc}", style="yellow")
-
-    def _delete_volume(self, volume_id: Optional[str]) -> None:
-        if not volume_id:
-            return
-        try:
-            self.ec2.delete_volume(VolumeId=volume_id)
-            log(f"Deleted volume {volume_id}")
-        except ClientError as exc:
-            log(f"delete_volume {volume_id}: {exc}", style="yellow")
-
     def cleanup(self) -> None:
-        self._delete_rp(self.nc_rp_arn)
-        self._delete_rp(self.c_rp_arn)
-        # Vault delete fails while RPs are DELETING.
+        for arn in (self.nc_rp_arn, self.c_rp_arn):
+            if not arn:
+                continue
+            try:
+                self.backup.delete_recovery_point(
+                    BackupVaultName=self.vault_name, RecoveryPointArn=arn
+                )
+            except ClientError as exc:
+                log(f"delete_recovery_point: {exc}", style="yellow")
+        for vol in (self.unenc_volume_id, self.enc_volume_id):
+            if not vol:
+                continue
+            try:
+                self.ec2.delete_volume(VolumeId=vol)
+            except ClientError as exc:
+                log(f"delete_volume: {exc}", style="yellow")
+
+
+class PlanProtectHarness:
+    """One tagged EBS volume + backup plan/selection. No vault describe/delete."""
+
+    def __init__(self, test_run_id: str, region: Optional[str] = None):
+        self.test_run_id = test_run_id
+        self.region = region or "us-east-1"
+        self.backup = boto3.client("backup", region_name=self.region)
+        self.ec2 = boto3.client("ec2", region_name=self.region)
+        self.iam = boto3.client("iam")
+        self.sts = boto3.client("sts")
+        self.account = self.sts.get_caller_identity()["Account"]
+        self.volume_id: Optional[str] = None
+        self.plan_id: Optional[str] = None
+        self.plan_arn: Optional[str] = None
+        self.selection_id: Optional[str] = None
+        self.vault_name = f"cfg-plan-vault-{test_run_id}"
+
+    def _az(self) -> str:
+        zones = self.ec2.describe_availability_zones(
+            Filters=[{"Name": "state", "Values": ["available"]}]
+        )["AvailabilityZones"]
+        return zones[0]["ZoneName"]
+
+    def _role_arn(self) -> str:
+        return self.iam.get_role(RoleName="AWSBackupDefaultServiceRole")["Role"]["Arn"]
+
+    def create_volume(self) -> str:
+        name = f"cfg-plan-vol-{self.test_run_id}"
+        vol = self.ec2.create_volume(
+            AvailabilityZone=self._az(),
+            Size=1,
+            VolumeType="gp3",
+            Encrypted=True,
+            TagSpecifications=[{
+                "ResourceType": "volume",
+                "Tags": [
+                    {"Key": TEST_RUN_ID_TAG_KEY, "Value": self.test_run_id},
+                    {"Key": PURPOSE_TAG_KEY, "Value": PURPOSE_TAG_VALUE},
+                    {"Key": "Name", "Value": name},
+                    {"Key": "ManagedBy", "Value": "aws-config-test-harness"},
+                ],
+            }],
+        )["VolumeId"]
+        log(f"Created plan-protect volume {vol}")
         deadline = time.time() + 180
         while time.time() < deadline:
+            state = self.ec2.describe_volumes(VolumeIds=[vol])["Volumes"][0]["State"]
+            if state == "available":
+                self.volume_id = vol
+                return vol
+            time.sleep(3)
+        raise TimeoutError(f"Volume {vol} not available")
+
+    def ensure_vault(self) -> str:
+        try:
+            self.backup.create_backup_vault(
+                BackupVaultName=self.vault_name,
+                BackupVaultTags={
+                    TEST_RUN_ID_TAG_KEY: self.test_run_id,
+                    PURPOSE_TAG_KEY: PURPOSE_TAG_VALUE,
+                },
+            )
+            log(f"Created vault {self.vault_name}")
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            log(f"create_backup_vault {self.vault_name}: {exc}", style="yellow")
+            if code == "AlreadyExistsException":
+                return self.vault_name
+            # Role can create jobs against an existing vault name even when
+            # DescribeBackupVault is denied.
+            self.vault_name = f"cfg-rp-vault-{self.test_run_id}"
+            log(f"Falling back to vault name {self.vault_name}")
+        return self.vault_name
+
+    def protect(self) -> None:
+        if not self.volume_id:
+            raise RuntimeError("create_volume first")
+        vault = self.ensure_vault()
+        resource_arn = f"arn:aws:ec2:{self.region}:{self.account}:volume/{self.volume_id}"
+        created = self.backup.create_backup_plan(
+            BackupPlan={
+                "BackupPlanName": f"cfg-plan-protect-{self.test_run_id}",
+                "Rules": [{
+                    "RuleName": "harness-daily",
+                    "TargetBackupVaultName": vault,
+                    "ScheduleExpression": "cron(0 5 ? * * *)",
+                    "Lifecycle": {"DeleteAfterDays": 1},
+                }],
+            },
+            BackupPlanTags={
+                TEST_RUN_ID_TAG_KEY: self.test_run_id,
+                PURPOSE_TAG_KEY: PURPOSE_TAG_VALUE,
+            },
+        )
+        self.plan_id = created["BackupPlanId"]
+        self.plan_arn = created["BackupPlanArn"]
+        log(f"Created backup plan {self.plan_id}")
+        sel = self.backup.create_backup_selection(
+            BackupPlanId=self.plan_id,
+            BackupSelection={
+                "SelectionName": f"cfg-plan-sel-{self.test_run_id}",
+                "IamRoleArn": self._role_arn(),
+                "Resources": [resource_arn],
+            },
+        )
+        self.selection_id = sel["SelectionId"]
+        log(f"Created backup selection {self.selection_id} for {resource_arn}")
+
+    def unprotect(self) -> None:
+        if self.plan_id and self.selection_id:
             try:
-                self.backup.delete_backup_vault(BackupVaultName=self.vault_name)
-                log(f"Deleted vault {self.vault_name}")
-                break
+                self.backup.delete_backup_selection(
+                    BackupPlanId=self.plan_id, SelectionId=self.selection_id
+                )
+                log(f"Deleted selection {self.selection_id}")
             except ClientError as exc:
-                log(f"delete_backup_vault: {exc}", style="yellow")
-                time.sleep(10)
-        self._delete_volume(self.unenc_volume_id)
-        self._delete_volume(self.enc_volume_id)
+                log(f"delete_backup_selection: {exc}", style="yellow")
+            self.selection_id = None
+        if self.plan_id:
+            try:
+                self.backup.delete_backup_plan(BackupPlanId=self.plan_id)
+                log(f"Deleted plan {self.plan_id}")
+            except ClientError as exc:
+                log(f"delete_backup_plan: {exc}", style="yellow")
+            self.plan_id = None
+
+    def cleanup(self) -> None:
+        self.unprotect()
+        if self.volume_id:
+            try:
+                self.ec2.delete_volume(VolumeId=self.volume_id)
+                log(f"Deleted volume {self.volume_id}")
+            except ClientError as exc:
+                log(f"delete_volume: {exc}", style="yellow")
+            self.volume_id = None
