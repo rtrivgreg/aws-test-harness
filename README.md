@@ -3,7 +3,7 @@
 Framework for validating AWS Config **managed rules** with a Terraform-provisioned
 resource toggled between COMPLIANT and NON_COMPLIANT.
 
-**Storage CP live proofs (2026-08-29): 32 / 59.** Details in `docs/RESUME.md`.
+**Storage CP live proofs (2026-08-29): 33 / 59.** Details in `docs/RESUME.md`.
 
 ## Design principles
 
@@ -21,7 +21,7 @@ KMS default encryption, events, replication, CRR, grantee, blacklisted actions,
 AP PAB, AP VPC-only, policy-not-more-permissive, object lock, tagged,
 account-level PAB periodic),
 EBS encrypted volumes + encryption-by-default + launch-template EBS encrypted,
-EFS (encrypted / backups / access points / CT encrypted),
+EFS (encrypted / backups / access points / CT encrypted / mount-target public),
 CloudTrail (log-file validation + KMS + all-read/all-write S3 data events),
 EC2 (IMDSv2, restricted SSH, vpc-sg-port-restriction-check),
 Backup min frequency/retention.
@@ -79,7 +79,7 @@ df -h / /mnt/scratchpad
 ```
 
 Run pytest from the **repo root**, not from `terraform/`.
-Use `--cache-dir=/mnt/scratchpad/pytest_tmp/.pytest_cache` so cache stays off root.
+Use `-o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache` (pytest 9.1.1 has no `--cache-dir`).
 
 ## High-level flow (per managed rule)
 
