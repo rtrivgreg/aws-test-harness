@@ -1,17 +1,17 @@
 # Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-28 19:52 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 06:12 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **26** · partial 1 · parked 2 · catalog-only **30** · total 59.
+**Counts:** live **26** · partial 1 · parked 3 · catalog-only **29** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
 | 1 | backup-plan-min-frequency-and-min-retention-check | BACKUP_PLAN_MIN_FREQUENCY_AND_MIN_RETENTION_CHECK | Backup | live | |
-| 2 | backup-recovery-point-encrypted | BACKUP_RECOVERY_POINT_ENCRYPTED | Backup | catalog-only | |
-| 3 | backup-recovery-point-manual-deletion-disabled | BACKUP_RECOVERY_POINT_MANUAL_DELETION_DISABLED | Backup | catalog-only | |
-| 4 | backup-recovery-point-minimum-retention-check | BACKUP_RECOVERY_POINT_MINIMUM_RETENTION_CHECK | Backup | catalog-only | |
+| 2 | backup-recovery-point-encrypted | BACKUP_RECOVERY_POINT_ENCRYPTED | Backup | parked | 2026-08-29 EBS jobs COMPLETED; Config list-discovered-resources AWS::Backup::RecoveryPoint = [] |
+| 3 | backup-recovery-point-manual-deletion-disabled | BACKUP_RECOVERY_POINT_MANUAL_DELETION_DISABLED | Backup | catalog-only | Same RP type as parked row 2 |
+| 4 | backup-recovery-point-minimum-retention-check | BACKUP_RECOVERY_POINT_MINIMUM_RETENTION_CHECK | Backup | catalog-only | Same RP type as parked row 2 |
 | 5 | cloudtrail-all-read-s3-data-event-check | CLOUDTRAIL_ALL_READ_S3_DATA_EVENT_CHECK | S3/CT | catalog-only | |
 | 6 | cloudtrail-all-write-s3-data-event-check | CLOUDTRAIL_ALL_WRITE_S3_DATA_EVENT_CHECK | S3/CT | catalog-only | |
 | 7 | ebs-in-backup-plan | EBS_IN_BACKUP_PLAN | EBS | catalog-only | |

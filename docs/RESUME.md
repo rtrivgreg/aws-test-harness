@@ -1,35 +1,51 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 05:40 EDT
+Last updated: 2026-08-29 06:12 EDT
 
 ## Score
 
 Portfolio live proofs: **32** standing.
-Storage CP matrix live **26** / 59 pending this morning's RP cycle.
+Storage CP matrix live **26** / 59. Parked **3**.
 Do not apply Terraform drift.
 
 ## Backend (confirmed 2026-08-29)
 
 - `tfstate-aws-test-harness-418295699841` versioning **Enabled**.
 - Lock table `tfstate-aws-test-harness-lock` **ACTIVE**.
-- Recorder on. Env vars set. venv active.
-- Live test bucket `cfg-test-ef57dcf4-ca589695` versioning **Suspended**
-  (leftover from S3_BUCKET_VERSIONING_ENABLED toggle). Leave it.
-- Extra buckets from older run still present: `cfg-test-14ac09fc-68e6193a`
-  and `cfg-test-logs-14ac09fc-68e6193a`. Do not delete mid-session.
+- Recorder on.
+- Live test bucket `cfg-test-ef57dcf4-ca589695` versioning **Suspended** (toggle leftover).
+- Older run buckets still present: `cfg-test-14ac09fc-68e6193a` / logs twin.
 
 ## Locked (EC2, run ef57dcf4)
 
-Events, replication, grantee, blacklisted-actions, AP PAB, AP VPC-only,
-policy-not-more-permissive, cross-region replication, default object lock,
-plus prior S3/EBS/EFS/CT/EC2/Backup-plan locks.
+S3 family as of 2026-08-28 plus EBS encrypted volumes, EFS, CloudTrail,
+EC2 IMDSv2/SSH/port-restriction, Backup plan min frequency/retention.
 
 Bucket pair: `cfg-test-ef57dcf4-ca589695` / `cfg-test-logs-ef57dcf4-ca589695`.
 
-## This session — lane A
+## Parked 2026-08-29 — BACKUP_RECOVERY_POINT_ENCRYPTED
 
-`BACKUP_RECOVERY_POINT_ENCRYPTED` via throwaway EBS volumes + vault.
-No Terraform apply. EBS RP encryption follows the source volume.
+Two EBS on-demand jobs COMPLETED. RP ARNs are EC2 snapshot ARNs.
+`list-discovered-resources --resource-type AWS::Backup::RecoveryPoint` = [].
+Do not rerun. Sibling RP rules (manual-deletion, min-retention) stay catalog-only
+until this recorder inventories that type.
+
+Leftover job snapshots (delete if still present):
+
+- `arn:aws:ec2:us-east-1::snapshot/snap-0ed309ee3a0da0752`
+- `arn:aws:ec2:us-east-1::snapshot/snap-023c1211f37c3fb71`
+- volumes `vol-0d2fc1f68ad84617f` `vol-083f9e5a4a3c260ba`
+- vault `cfg-rp-vault-ef57dcf4` (DescribeBackupVault is AccessDenied on this role)
+
+## Other parked
+
+RESTRICTED_INCOMING_TRAFFIC; S3 SSE-S3 implicit; FSx OpenZFS;
+EBS snapshot public-restorable C path.
+
+## Next
+
+Lane B: `EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` or `EFS_IN_BACKUP_PLAN`
+(resource types Config already records). No terraform apply.
 
 ```bash
 cd ~/repost/aws-test-harness
@@ -39,15 +55,7 @@ export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
 export CATALOG_TABLE_NAME=y62db-config-rule-catalog CATALOG_GROUP=default
 export TEST_RUN_ID=ef57dcf4
 export S3_TEST_BUCKET=cfg-test-ef57dcf4-ca589695
-pytest -q tests/test_backup_recovery_point_rules.py --tb=short
 ```
-
-Needs IAM role `AWSBackupDefaultServiceRole`.
-
-## Parked
-
-RESTRICTED_INCOMING_TRAFFIC; S3 SSE-S3 implicit; FSx destroyed;
-EBS snapshot public-restorable C path.
 
 ## Terraform
 

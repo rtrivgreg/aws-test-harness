@@ -3,7 +3,7 @@
 Framework for validating AWS Config **managed rules** with a Terraform-provisioned
 resource toggled between COMPLIANT and NON_COMPLIANT.
 
-**Live proofs (2026-08-28): 22 / 26 = 85%.** Details in `docs/RESUME.md`.
+**Storage CP live proofs (2026-08-29): 26 / 59.** Details in `docs/RESUME.md`.
 
 ## Design principles
 
@@ -16,7 +16,9 @@ resource toggled between COMPLIANT and NON_COMPLIANT.
 
 ## Locked vs parked
 
-Locked: S3 (10, including KMS default encryption and ACL prohibited),
+Locked: S3 family (versioning, lifecycle, logging, public access, SSL, ACL,
+KMS default encryption, events, replication, CRR, grantee, blacklisted actions,
+AP PAB, AP VPC-only, policy-not-more-permissive, object lock, tagged),
 EBS encrypted volumes, EFS (encrypted / backups / access points),
 CloudTrail (log-file validation + KMS), EC2 (IMDSv2, restricted SSH,
 vpc-sg-port-restriction-check), Backup min frequency/retention.
@@ -26,6 +28,7 @@ Parked on purpose (do not rerun):
 - `RESTRICTED_INCOMING_TRAFFIC` — INSUFFICIENT_DATA, empty EvaluationResults
 - `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED` — SSE-S3 is implicit on modern buckets
 - FSx OpenZFS — filesystem AVAILABLE; Config never discovered it
+- `BACKUP_RECOVERY_POINT_ENCRYPTED` — EBS jobs COMPLETED; Config never discovered `AWS::Backup::RecoveryPoint`
 - EBS snapshot public-restorable COMPLIANT — account-scoped periodic rule
 
 ## Terraform state
@@ -60,6 +63,7 @@ export AWS_DEFAULT_REGION=us-east-1
 export CATALOG_TABLE_NAME=y62db-config-rule-catalog
 export CATALOG_GROUP=default
 export TEST_RUN_ID=ef57dcf4
+export S3_TEST_BUCKET=cfg-test-ef57dcf4-ca589695
 export CLOUDTRAIL_KMS_KEY_ARN=arn:aws:kms:us-east-1:418295699841:key/45b99a45-cb78-47e5-9f70-0296ef21bee7
 
 aws configservice describe-configuration-recorder-status --region us-east-1
