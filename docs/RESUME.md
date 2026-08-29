@@ -1,26 +1,19 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 15:56 EDT
+Last updated: 2026-08-29 17:17 EDT
 
 ## Score
 
-Storage CP live **37 / 59**. Partial 1. Parked 7. Catalog-only 14.
+Storage CP live **37 / 59**. Partial 1. Parked 8. Catalog-only 13.
 Do not apply Terraform drift.
 
-## Locked after the break
+## Parked this hour — EBS_LAST_BACKUP_RECOVERY_POINT_CREATED
 
-- `S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — 127s
-- `EFS_IN_BACKUP_PLAN` / `EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` earlier
+`resourceId=vol-0e2d17d11bf705c4c` accepted. Rule ACTIVE. EvaluationResults = [].
+300s. Same recorder gap as RecoveryPoint / EBS protected-by-plan / EBS_IN_BACKUP_PLAN.
+Do not rerun.
 
-## Parked this afternoon — EBS_IN_BACKUP_PLAN
+## Live today (boto3)
 
-Rule ACTIVE and emitting results, but only for leftover volumes:
-
-- `vol-02fb846068d4f8138` NON_COMPLIANT
-- `vol-060b48b8621c69275` NON_COMPLIANT
-
-Harness volumes never appeared: `vol-09c267fad47044590`, then `vol-035c6b510dbfd949f`.
-Three evals / 300s+. Do not rerun. EFS/S3 twins of this family are live.
-
-Also parked earlier: RP encrypted; EBS protected-by-plan; snapshot BPA stale CI;
-RCP; SSE-S3; FSx OpenZFS; snapshot C path.
+EFS mount-target, EBS optimized, EFS in-plan, EFS protected-by-plan,
+S3 protected-by-plan.
