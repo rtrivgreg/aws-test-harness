@@ -1,8 +1,7 @@
 """EFS_IN_BACKUP_PLAN — off-plan NC, on-plan C.
 
-Periodic. Throwaway EFS + backup selection. No Terraform.
-EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN parked INSUFFICIENT_DATA on this
-recorder; this identifier may do the same.
+Periodic. No input parameters (resourceId is invalid on this identifier).
+Throwaway EFS + backup selection. No Terraform.
 """
 
 from __future__ import annotations
@@ -19,11 +18,11 @@ from harness.dry_run import log
 from harness.efs_plan_toggle import EfsPlanProtectHarness
 
 
-def _spec(fs_id: str) -> ManagedRuleSpec:
+def _spec() -> ManagedRuleSpec:
     return ManagedRuleSpec(
         rule_name="efs-in-backup-plan",
         source_identifier="EFS_IN_BACKUP_PLAN",
-        input_parameters={"resourceId": fs_id},
+        input_parameters={},
         resource_types=["AWS::EFS::FileSystem"],
         toggle_strategy="efs_in_backup_plan",
     )
@@ -52,7 +51,7 @@ def test_efs_in_backup_plan(
     passed = False
     try:
         fs_id = harness.create_filesystem()
-        spec = _spec(fs_id)
+        spec = _spec()
         log(f"===== Testing rule: {spec.rule_name} fs={fs_id} =====")
         compliance.wait_for_resource_discovered(
             resource_id=fs_id,
