@@ -49,7 +49,41 @@ def aws_region() -> str:
     return os.environ.get("AWS_REGION", "us-east-1")
 
 
+def _plan_destroys(tf_dir: Path, env: dict) -> list[str]:
+    plan = subprocess.run(
+        ["terraform", "plan", "-input=false", "-out=tfplan"],
+        cwd=tf_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if plan.returncode not in (0, 2):
+        log(plan.stderr, style="red")
+        pytest.fail(f"terraform plan failed: {plan.stderr}")
+    show = subprocess.run(
+        ["terraform", "show", "-json", "tfplan"],
+        cwd=tf_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if show.returncode != 0:
+        pytest.fail(f"terraform show failed: {show.stderr}")
+    data = json.loads(show.stdout or "{}")
+    dest = []
+    for change in data.get("resource_changes", []):
+        acts = change.get("change", {}).get("actions", [])
+        if "delete" in acts:
+            dest.append(change.get("address", "unknown"))
+    return dest
+
+
 def _terraform_apply(tf_dir: Path, env: dict) -> dict:
+    if os.environ.get("HARNESS_ALLOW_TF_APPLY") != "1":
+        pytest.fail(
+            "Terraform apply from pytest is blocked. "
+            "Set S3_TEST_BUCKET for S3 tests, or HARNESS_ALLOW_TF_APPLY=1 after a destroy-free plan."
+        )
     init = subprocess.run(
         ["terraform", "init", "-input=false"],
         cwd=tf_dir,
@@ -60,6 +94,9 @@ def _terraform_apply(tf_dir: Path, env: dict) -> dict:
     if init.returncode != 0:
         log(init.stderr, style="red")
         pytest.fail(f"terraform init failed: {init.stderr}")
+    dest = _plan_destroys(tf_dir, env)
+    if dest:
+        pytest.fail("Refusing terraform apply; plan destroys:\n" + "\n".join(dest))
     result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         cwd=tf_dir,
@@ -85,6 +122,14 @@ def _terraform_apply(tf_dir: Path, env: dict) -> dict:
 def s3_test_bucket(
     test_run_id: str, aws_region: str, request: pytest.FixtureRequest
 ) -> Generator[str, None, None]:
+    preset = os.environ.get("S3_TEST_BUCKET", "").strip()
+    if preset:
+        log(f"Using S3_TEST_BUCKET={preset} (no Terraform apply)")
+        ComplianceChecker(region=aws_region).wait_for_resource_discovered(
+            resource_id=preset, resource_type="AWS::S3::Bucket"
+        )
+        yield preset
+        return
     tf_dir = Path(request.config.getoption("--terraform-dir"))
     if not tf_dir.exists():
         pytest.skip(f"Terraform directory {tf_dir} not found")
@@ -138,7 +183,6 @@ def efs_filesystems(
     env["TF_VAR_test_run_id"] = test_run_id
     env["TF_VAR_aws_region"] = aws_region
     env["TF_VAR_enable_efs_test_filesystems"] = "true"
-    log("Running terraform apply for EFS test file systems ...")
     outputs = _terraform_apply(tf_dir, env)
     unenc = outputs.get("efs_unencrypted_id", {}).get("value")
     enc = outputs.get("efs_encrypted_id", {}).get("value")
@@ -170,7 +214,6 @@ def cloudtrail_trail(
     env["TF_VAR_test_run_id"] = test_run_id
     env["TF_VAR_aws_region"] = aws_region
     env["TF_VAR_enable_cloudtrail_test"] = "true"
-    log("Running terraform apply for CloudTrail test trail ...")
     outputs = _terraform_apply(tf_dir, env)
     name = outputs.get("cloudtrail_name", {}).get("value")
     arn = outputs.get("cloudtrail_arn", {}).get("value")
