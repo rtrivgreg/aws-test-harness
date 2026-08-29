@@ -18,6 +18,9 @@ resource "aws_s3_bucket" "logs" {
     Name        = local.bucket_name
     test-run-id = var.test_run_id
   })
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -68,4 +71,7 @@ resource "aws_cloudtrail" "harness" {
     Name        = local.trail_name
     test-run-id = var.test_run_id
   })
+  lifecycle {
+    prevent_destroy = true
+  }
 }

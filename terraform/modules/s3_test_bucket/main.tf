@@ -14,6 +14,9 @@ resource "aws_s3_bucket" "test" {
     Name          = local.bucket_name
     "test-run-id" = var.test_run_id
   })
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "test" {
@@ -55,6 +58,9 @@ resource "aws_s3_bucket" "logs" {
     "test-run-id" = var.test_run_id
     Purpose       = "s3-access-logs-target"
   })
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
