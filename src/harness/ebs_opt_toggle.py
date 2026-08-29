@@ -96,28 +96,66 @@ class EbsOptimizedHarness:
         imgs.sort(key=lambda i: i.get("CreationDate", ""), reverse=True)
         return imgs[0]["ImageId"]
 
+    def _support_for(self, instance_type: str) -> Optional[str]:
+        try:
+            types = self.ec2.describe_instance_types(InstanceTypes=[instance_type]).get(
+                "InstanceTypes", []
+            )
+        except ClientError as exc:
+            log(f"describe_instance_types {instance_type}: {exc}", style="yellow")
+            return None
+        if not types:
+            return None
+        return ((types[0].get("EbsInfo") or {}).get("EbsOptimizedSupport") or "").lower()
+
+    def _scan_optional_types(self) -> list[str]:
+        names: list[str] = []
+        token = None
+        while True:
+            kwargs = {
+                "Filters": [
+                    {
+                        "Name": "ebs-info.ebs-optimized-support",
+                        "Values": ["supported"],
+                    }
+                ]
+            }
+            if token:
+                kwargs["NextToken"] = token
+            resp = self.ec2.describe_instance_types(**kwargs)
+            for t in resp.get("InstanceTypes", []):
+                names.append(t["InstanceType"])
+            token = resp.get("NextToken")
+            if not token:
+                break
+        names.sort()
+        log(f"Region optional EBS-optimized types ({len(names)}): {names[:20]}")
+        return names
+
     def _pick_optional_type(self) -> str:
         forced = os.environ.get("HARNESS_EBS_OPT_TYPE", "").strip()
-        wanted = [forced] if forced else list(PREFERRED_OPTIONAL)
-        types = self.ec2.describe_instance_types(InstanceTypes=wanted).get(
-            "InstanceTypes", []
-        )
-        by_name = {t["InstanceType"]: t for t in types}
-        for name in wanted:
-            info = by_name.get(name)
-            if not info:
-                continue
-            support = (
-                (info.get("EbsInfo") or {}).get("EbsOptimizedSupport") or ""
-            ).lower()
+        if forced:
+            support = self._support_for(forced)
             if support == "supported":
-                log(f"Optional EBS-optimized type {name} (support={support})")
+                log(f"Using HARNESS_EBS_OPT_TYPE={forced}")
+                return forced
+            raise RuntimeError(
+                f"HARNESS_EBS_OPT_TYPE={forced} EbsOptimizedSupport={support}"
+            )
+        for name in PREFERRED_OPTIONAL:
+            support = self._support_for(name)
+            log(f"{name} EbsOptimizedSupport={support}")
+            if support == "supported":
                 return name
-            log(f"Skip {name} EbsOptimizedSupport={support}")
+        scanned = self._scan_optional_types()
+        if scanned:
+            chosen = scanned[0]
+            log(f"Using first regional optional type {chosen}")
+            return chosen
         raise RuntimeError(
-            "No optional EBS-optimized instance type available. "
-            "Current-gen types are default-on and cannot prove NON_COMPLIANT. "
-            "Set HARNESS_EBS_OPT_TYPE if a supported previous-gen type exists."
+            "No instance type in this region has EbsOptimizedSupport=supported. "
+            "Park EBS_OPTIMIZED_INSTANCE: current-gen types are default-on and "
+            "the rule always returns COMPLIANT for them."
         )
 
     def _placement(self) -> tuple[str, str]:
