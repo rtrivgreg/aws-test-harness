@@ -1,15 +1,13 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-29 13:30 EDT
+Last updated: 2026-08-29 13:50 EDT
 
 ## Score
 
-Storage CP live **33 / 59**. Partial 1. Parked 6. Catalog-only 19.
+Storage CP live **34 / 59**. Partial 1. Parked 6. Catalog-only 18.
 Do not apply Terraform drift.
 
 ## Runner disk (t3.medium)
-
-Root is tight. 20G extra volume is mounted at `/mnt/scratchpad` (`nvme1n1`).
 
 ```bash
 export TMPDIR="/mnt/scratchpad/pytest_tmp"
@@ -18,15 +16,13 @@ export TF_DATA_DIR="/mnt/scratchpad/terraform/.terraform"
 pytest -o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache
 ```
 
-`--cache-dir` is not a pytest 9.1.1 flag. Use `-o cache_dir=...`.
-
 ## Locked this afternoon
 
-- `EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE` — 167s; public-subnet MT NC / private-subnet MT C
-  - nc FS `fs-0e4463735c99d6330` mt `fsmt-0899847926d77d7d5`
-  - c FS `fs-06e028de078bdd97f` mt `fsmt-0c4d16d42e21cf831`
-  - throwaway SG + private /28 deleted in cleanup
-  - first miss: default VPC `vpc-0c4f804e905f41635` had no private subnet; harness now uses instance VPC via IMDS
+- `EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE` — 167s
+- `EBS_OPTIMIZED_INSTANCE` — 210s; `HARNESS_EBS_OPT_TYPE=c3.xlarge` NC + t3.nano C
+  - nc `i-01cf1611d88f4aad6` / c `i-0ca362133716d13a3`
+  - both terminated; SG `sg-073136aa8591ca1a1` deleted
+  - m4/c4/t3 are default-on and cannot prove NC in this region
 
 ## Locked this morning (6)
 
@@ -44,4 +40,6 @@ RCP; SSE-S3; FSx OpenZFS; snapshot C path.
 
 ## Next
 
-Do not apply Terraform. Least-bad remaining: `EBS_OPTIMIZED_INSTANCE`.
+Do not apply Terraform. Remaining rows are long-shots (MFA delete, S3 Express,
+air-gapped vault, restore-time, last-RP-created, spot-fleet CT, other FSx,
+coverage-family backup rules).
