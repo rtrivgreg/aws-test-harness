@@ -1,10 +1,10 @@
 # Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 13:30 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 13:50 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **33** · partial 1 · parked 6 · catalog-only **19** · total 59.
+**Counts:** live **34** · partial 1 · parked 6 · catalog-only **18** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
@@ -17,7 +17,7 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 7 | ebs-in-backup-plan | EBS_IN_BACKUP_PLAN | EBS | catalog-only | Coverage family; do not rerun this recorder |
 | 8 | ebs-last-backup-recovery-point-created | EBS_LAST_BACKUP_RECOVERY_POINT_CREATED | EBS | catalog-only | |
 | 9 | ebs-meets-restore-time-target | EBS_MEETS_RESTORE_TIME_TARGET | EBS | catalog-only | |
-| 10 | ebs-optimized-instance | EBS_OPTIMIZED_INSTANCE | EBS | catalog-only | |
+| 10 | ebs-optimized-instance | EBS_OPTIMIZED_INSTANCE | EBS | live | 2026-08-29 210s; c3.xlarge EbsOptimized=false NC; t3.nano C |
 | 11 | ebs-resources-in-logically-air-gapped-vault | EBS_RESOURCES_IN_LOGICALLY_AIR_GAPPED_VAULT | EBS | catalog-only | |
 | 12 | ebs-resources-protected-by-backup-plan | EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN | EBS | parked | 2026-08-29 INSUFFICIENT_DATA, EvaluationResults [] |
 | 13 | ebs-snapshot-block-public-access | EBS_SNAPSHOT_BLOCK_PUBLIC_ACCESS | EBS | parked | Stale CI |
