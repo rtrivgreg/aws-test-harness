@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 import boto3
+from botocore.exceptions import ClientError
 
 from harness.dry_run import log
 
@@ -23,8 +24,15 @@ class AccountPabToggle:
         self.s3c = boto3.client("s3control", region_name=self.region)
 
     def get(self) -> dict:
-        cfg = self.s3c.get_public_access_block(AccountId=self.account)
-        return dict(cfg.get("PublicAccessBlockConfiguration") or {})
+        try:
+            cfg = self.s3c.get_public_access_block(AccountId=self.account)
+            return dict(cfg.get("PublicAccessBlockConfiguration") or {})
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in ("NoSuchPublicAccessBlockConfiguration", "NoSuchConfiguration"):
+                log("No account PAB configured yet")
+                return {}
+            raise
 
     def set(self, cfg: dict) -> dict:
         log(f"Put account PAB {cfg}")
