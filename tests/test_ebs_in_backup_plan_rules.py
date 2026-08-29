@@ -1,7 +1,7 @@
 """EBS_IN_BACKUP_PLAN — off-plan NC, on-plan C.
 
-Periodic. No input parameters. Throwaway volume + backup selection.
-No Terraform. Different identifier from parked EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN.
+Periodic. No input parameters, so Config evaluates every recorded volume.
+Wait until the throwaway volume itself appears in EvaluationResults.
 """
 
 from __future__ import annotations
@@ -35,6 +35,42 @@ def _dump(config_mgr: ConfigRuleManager, compliance: ComplianceChecker, rule_nam
         q = r.get("EvaluationResultIdentifier", {}).get("EvaluationResultQualifier", {})
         rows.append(f"{q.get('ResourceId')}:{r.get('ComplianceType')}:{r.get('Annotation')}")
     log(f"EvaluationResults ({len(rows)}): {rows}")
+    return rows
+
+
+def _eval_until_volume(
+    config_mgr: ConfigRuleManager,
+    compliance: ComplianceChecker,
+    rule_name: str,
+    volume_id: str,
+    expected: str,
+    attempts: int = 3,
+):
+    last = None
+    for i in range(1, attempts + 1):
+        eval_ts = time.time() - 30
+        config_mgr.start_evaluation(rule_name)
+        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
+        rows = _dump(config_mgr, compliance, rule_name)
+        ids = [r.split(":", 1)[0] for r in rows]
+        if volume_id in ids:
+            return compliance.wait_for_resource_result(
+                rule_name=rule_name,
+                resource_id=volume_id,
+                expected=expected,
+                config_mgr=config_mgr,
+                after_timestamp=eval_ts,
+                timeout_seconds=120,
+            )
+        log(
+            f"Attempt {i}: harness volume {volume_id} not in results {ids}; settle 30s",
+            style="yellow",
+        )
+        time.sleep(30)
+        last = rows
+    raise AssertionError(
+        f"{volume_id} never appeared under {rule_name}. Last results={last}"
+    )
 
 
 @pytest.mark.ebs
@@ -58,37 +94,20 @@ def test_ebs_in_backup_plan(
             resource_type="AWS::EC2::Volume",
             timeout_seconds=300,
         )
+        time.sleep(20)
         rule_name = config_mgr.put_managed_rule(
             spec, maximum_execution_frequency="TwentyFour_Hours"
         )
 
-        eval_ts = time.time() - 30
-        config_mgr.start_evaluation(rule_name)
-        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
-        _dump(config_mgr, compliance, rule_name)
-        nc = compliance.wait_for_resource_result(
-            rule_name=rule_name,
-            resource_id=volume_id,
-            expected="NON_COMPLIANT",
-            config_mgr=config_mgr,
-            after_timestamp=eval_ts,
-            timeout_seconds=300,
+        nc = _eval_until_volume(
+            config_mgr, compliance, rule_name, volume_id, "NON_COMPLIANT"
         )
         assert nc[0]["ComplianceType"] == "NON_COMPLIANT"
 
         harness.protect()
         time.sleep(20)
-        eval_ts = time.time() - 30
-        config_mgr.start_evaluation(rule_name)
-        config_mgr.wait_for_evaluation(rule_name, after_timestamp=eval_ts)
-        _dump(config_mgr, compliance, rule_name)
-        c = compliance.wait_for_resource_result(
-            rule_name=rule_name,
-            resource_id=volume_id,
-            expected="COMPLIANT",
-            config_mgr=config_mgr,
-            after_timestamp=eval_ts,
-            timeout_seconds=300,
+        c = _eval_until_volume(
+            config_mgr, compliance, rule_name, volume_id, "COMPLIANT"
         )
         assert c[0]["ComplianceType"] == "COMPLIANT"
         log(f"{spec.rule_name} passed off-plan NC / on-plan C", style="green")
