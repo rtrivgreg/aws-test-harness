@@ -6,7 +6,7 @@ on:
       pytest_args:
         description: pytest args (repo-root relative)
         required: true
-        default: tests/test_s3express_lifecycle_rules.py -q -s
+        default: tests/test_spot_fleet_encryption_rules.py -q -s
 
 concurrency:
   group: harness-ec2-live
@@ -31,6 +31,7 @@ jobs:
       - name: pull SHA and run pytest on existing clone
         run: |
           set -euo pipefail
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE || true
           df -h / /mnt/scratchpad
           cd /home/ubuntu/repost/aws-test-harness
           git stash --include-untracked || true
@@ -38,5 +39,6 @@ jobs:
           git checkout --force "${GITHUB_SHA}"
           source .venv/bin/activate
           python -V
+          aws sts get-caller-identity --region us-east-1
           pytest ${{ inputs.pytest_args }} \
             -o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache
