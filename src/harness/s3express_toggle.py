@@ -1,6 +1,7 @@
 """Throwaway S3 Express directory bucket + lifecycle toggle.
 
-Control-plane APIs use the regional s3express-control endpoint.
+Control-plane APIs use the regional s3express-control endpoint with
+path-style addressing. Virtual-hosted CreateSession URLs fail from this VPC.
 No Terraform. Always delete the bucket in cleanup.
 """
 
@@ -9,7 +10,8 @@ from __future__ import annotations
 from typing import Optional
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 
 from harness.dry_run import is_dry_run, log
 
@@ -27,6 +29,10 @@ class S3ExpressLifecycleHarness:
             "s3",
             region_name=region,
             endpoint_url=f"https://s3express-control.{region}.amazonaws.com",
+            config=Config(
+                s3={"addressing_style": "path", "use_accelerate_endpoint": False},
+                retries={"max_attempts": 4, "mode": "standard"},
+            ),
         )
 
     def create(self) -> str:
@@ -53,10 +59,12 @@ class S3ExpressLifecycleHarness:
                 self.az_id = az
                 log(f"Created directory bucket {name}")
                 return name
-            except ClientError as exc:
+            except (ClientError, BotoCoreError) as exc:
                 last_exc = exc
-                code = exc.response.get("Error", {}).get("Code", "")
-                log(f"create_bucket {name} failed ({code}); trying next AZ")
+                code = ""
+                if isinstance(exc, ClientError):
+                    code = exc.response.get("Error", {}).get("Code", "")
+                log(f"create_bucket {name} failed ({code or type(exc).__name__}); trying next AZ")
         raise RuntimeError(f"Could not create S3 Express directory bucket: {last_exc}")
 
     def put_expiration(self, days: int = EXPIRATION_DAYS) -> None:
@@ -72,8 +80,8 @@ class S3ExpressLifecycleHarness:
                     {
                         "ID": f"harness-{self.test_run_id}",
                         "Status": "Enabled",
-                        "Expiration": {"Days": days},
                         "Filter": {"Prefix": ""},
+                        "Expiration": {"Days": days},
                     }
                 ]
             },
