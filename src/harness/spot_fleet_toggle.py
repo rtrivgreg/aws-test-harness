@@ -2,11 +2,12 @@
 
 Uses LaunchSpecifications, not launch templates (the managed rule skips LTs).
 TargetCapacity=0 so no instances launch. Always cancel both requests.
+Does not create IAM roles (EC2-SSM-Role cannot iam:CreateRole).
 """
 
 from __future__ import annotations
 
-import json
+import os
 import urllib.error
 import urllib.request
 from typing import Optional
@@ -17,7 +18,12 @@ from botocore.exceptions import ClientError
 from harness.dry_run import is_dry_run, log
 from harness.tags import PURPOSE_TAG_KEY, PURPOSE_TAG_VALUE, TEST_RUN_ID_TAG_KEY
 
-FLEET_ROLE_NAME = "cfg-harness-spot-fleet-role"
+KNOWN_ROLE_NAMES = (
+    "aws-ec2-spot-fleet-tagging-role",
+    "AmazonEC2SpotFleetRole",
+    "aws-ec2-spot-fleet-role",
+    "AWSServiceRoleForEC2SpotFleet",
+)
 
 
 def _imds(path: str) -> Optional[str]:
@@ -48,7 +54,6 @@ class SpotFleetEncryptHarness:
         self.nc_id: Optional[str] = None
         self.c_id: Optional[str] = None
         self.role_arn: Optional[str] = None
-        self.created_role = False
 
     def _ami(self) -> str:
         imgs = self.ec2.describe_images(
@@ -64,8 +69,6 @@ class SpotFleetEncryptHarness:
         return imgs[0]["ImageId"]
 
     def _subnet(self) -> str:
-        import os
-
         subnet = os.environ.get("HARNESS_SUBNET_ID", "").strip()
         if not subnet:
             mac = _imds("mac")
@@ -76,41 +79,26 @@ class SpotFleetEncryptHarness:
         return subnet
 
     def _ensure_role(self) -> str:
-        account = boto3.client("sts").get_caller_identity()["Account"]
-        arn = f"arn:aws:iam::{account}:role/{FLEET_ROLE_NAME}"
-        try:
-            self.iam.get_role(RoleName=FLEET_ROLE_NAME)
-            self.role_arn = arn
-            return arn
-        except ClientError:
-            pass
-        trust = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {"Service": "spotfleet.amazonaws.com"},
-                    "Action": "sts:AssumeRole",
-                }
-            ],
-        }
-        self.iam.create_role(
-            RoleName=FLEET_ROLE_NAME,
-            AssumeRolePolicyDocument=json.dumps(trust),
-            Description="harness throwaway Spot Fleet role",
-            Tags=[
-                {"Key": TEST_RUN_ID_TAG_KEY, "Value": self.test_run_id},
-                {"Key": PURPOSE_TAG_KEY, "Value": PURPOSE_TAG_VALUE},
-            ],
+        forced = os.environ.get("HARNESS_SPOT_FLEET_ROLE_ARN", "").strip()
+        if forced:
+            self.role_arn = forced
+            log(f"Using HARNESS_SPOT_FLEET_ROLE_ARN={forced}")
+            return forced
+        for name in KNOWN_ROLE_NAMES:
+            try:
+                arn = self.iam.get_role(RoleName=name)["Role"]["Arn"]
+                self.role_arn = arn
+                log(f"Using existing Spot Fleet role {arn}")
+                return arn
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code", "")
+                log(f"get_role {name}: {code}")
+        raise RuntimeError(
+            "Park EC2_SPOT_FLEET_REQUEST_CT_ENCRYPTION_AT_REST: no Spot Fleet IAM "
+            "role in this account and EC2-SSM-Role cannot iam:CreateRole. "
+            "Create aws-ec2-spot-fleet-tagging-role (AmazonEC2SpotFleetTaggingRole) "
+            "or set HARNESS_SPOT_FLEET_ROLE_ARN."
         )
-        self.iam.attach_role_policy(
-            RoleName=FLEET_ROLE_NAME,
-            PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole",
-        )
-        self.created_role = True
-        self.role_arn = arn
-        log(f"Created Spot Fleet role {arn}")
-        return arn
 
     def _request(self, encrypted: bool) -> str:
         name = f"cfg-sfr-{'c' if encrypted else 'nc'}-{self.test_run_id}"
@@ -167,21 +155,12 @@ class SpotFleetEncryptHarness:
 
     def cleanup(self) -> None:
         ids = [i for i in (self.nc_id, self.c_id) if i and not i.endswith("-dry")]
-        if ids:
-            try:
-                self.ec2.cancel_spot_fleet_requests(
-                    SpotFleetRequestIds=ids, TerminateInstances=True
-                )
-                log(f"Cancelled Spot Fleet requests {ids}")
-            except ClientError as exc:
-                log(f"cancel_spot_fleet_requests: {exc}", style="yellow")
-        if self.created_role:
-            try:
-                self.iam.detach_role_policy(
-                    RoleName=FLEET_ROLE_NAME,
-                    PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole",
-                )
-                self.iam.delete_role(RoleName=FLEET_ROLE_NAME)
-                log(f"Deleted role {FLEET_ROLE_NAME}")
-            except ClientError as exc:
-                log(f"delete_role ignored: {exc}", style="yellow")
+        if not ids:
+            return
+        try:
+            self.ec2.cancel_spot_fleet_requests(
+                SpotFleetRequestIds=ids, TerminateInstances=True
+            )
+            log(f"Cancelled Spot Fleet requests {ids}")
+        except ClientError as exc:
+            log(f"cancel_spot_fleet_requests: {exc}", style="yellow")
