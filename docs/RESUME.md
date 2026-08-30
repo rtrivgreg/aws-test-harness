@@ -1,23 +1,28 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-30 05:42 EDT
+Last updated: 2026-08-30 06:10 EDT
 
 ## Score
 
 Storage CP live **38 / 59**. Partial 1. Parked 10. Catalog-only 10.
-Do not apply Terraform drift.
+Do not apply Terraform drift. Do not widen EC2-SSM-Role.
 
-## This morning
+## Recorder inventory (SSM, 2026-08-30 10:09 UTC)
 
-Self-hosted runner works. Instance profile `EC2-SSM-Role` on `i-015cc0059621c1a1c`.
+Recorder `default` recording=True lastStatus=SUCCESS.
+70 discovered types. Present: BackupPlan=1, BackupSelection=1, BackupVault=5.
+Absent (list n=0): RecoveryPoint, LogicallyAirGappedBackupVault,
+RestoreTestingPlan, EC2 SpotFleet, FSx FileSystem, S3Express DirectoryBucket.
 
-Parked `S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK` — s3express-control unreachable.
+GHA under EC2-SSM-Role cannot call Config inventory APIs. Live cycles stay on SSM.
 
-Parked `EC2_SPOT_FLEET_REQUEST_CT_ENCRYPTION_AT_REST` — no Spot Fleet IAM role
-and `EC2-SSM-Role` cannot `iam:CreateRole` / no matching GetRole.
-Unpark if you create `aws-ec2-spot-fleet-tagging-role` with
-`AmazonEC2SpotFleetTaggingRole` (or set `HARNESS_SPOT_FLEET_ROLE_ARN`) and
-`iam:PassRole` for that role on the instance profile.
+## Closed this morning
+
+- S3 Express — control-plane endpoint unreachable from private subnet
+- Spot Fleet — no fleet IAM role; type not in recorder
+- RecoveryPoint family — Config count stays 0 after completed Backup jobs
+- FSx family — FileSystem never discovered
+- Air-gapped vault / restore-time — types not in recorder; do not create them here
 
 ## Locked 2026-08-29 evening
 
