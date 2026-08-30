@@ -3,7 +3,7 @@
 Framework for validating AWS Config **managed rules** with a Terraform-provisioned
 resource toggled between COMPLIANT and NON_COMPLIANT.
 
-**Storage CP live proofs (2026-08-29): 33 / 59.** Details in `docs/RESUME.md`.
+**Storage CP live proofs (2026-08-30): 38 / 59.** Details in `docs/RESUME.md`.
 
 ## Design principles
 
@@ -19,9 +19,11 @@ resource toggled between COMPLIANT and NON_COMPLIANT.
 Locked: S3 family (versioning, lifecycle, logging, public access, SSL, ACL,
 KMS default encryption, events, replication, CRR, grantee, blacklisted actions,
 AP PAB, AP VPC-only, policy-not-more-permissive, object lock, tagged,
-account-level PAB periodic),
-EBS encrypted volumes + encryption-by-default + launch-template EBS encrypted,
-EFS (encrypted / backups / access points / CT encrypted / mount-target public),
+account-level PAB periodic, last-RP created, protected-by-backup-plan),
+EBS encrypted volumes + encryption-by-default + launch-template EBS encrypted
++ EBS-optimized instance,
+EFS (encrypted / backups / access points / CT encrypted / mount-target public
+/ in-backup-plan / protected-by-plan),
 CloudTrail (log-file validation + KMS + all-read/all-write S3 data events),
 EC2 (IMDSv2, restricted SSH, vpc-sg-port-restriction-check),
 Backup min frequency/retention.
@@ -35,6 +37,8 @@ Parked on purpose (do not rerun):
 - `EBS_RESOURCES_PROTECTED_BY_BACKUP_PLAN` — INSUFFICIENT_DATA
 - EBS snapshot public-restorable COMPLIANT — account-scoped periodic rule
 - EBS snapshot block-public-access — stale CI
+- `EBS_IN_BACKUP_PLAN` — eval only stale volumes, never harness volume
+- `EBS_LAST_BACKUP_RECOVERY_POINT_CREATED` — empty EvaluationResults
 
 ## Terraform state
 
@@ -80,6 +84,13 @@ df -h / /mnt/scratchpad
 
 Run pytest from the **repo root**, not from `terraform/`.
 Use `-o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache` (pytest 9.1.1 has no `--cache-dir`).
+
+Next live candidate (not locked): `S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK`.
+
+```bash
+pytest tests/test_s3express_lifecycle_rules.py -q -s \
+  -o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache
+```
 
 ## High-level flow (per managed rule)
 

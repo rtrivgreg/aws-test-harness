@@ -1,10 +1,10 @@
 # Storage CP — 59-row validation matrix
 
 Pack source: `rtrivgreg/aws-crud-rules-db` `JSON/storage.json` (59 names).  
-Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-29 13:50 EDT.  
+Lab: `418295699841` `us-east-1` run `ef57dcf4` as of 2026-08-30 04:45 EDT.  
 Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, will not complete here; **catalog-only** = in the 59, no live cycle in this lab.
 
-**Counts:** live **34** · partial 1 · parked 6 · catalog-only **18** · total 59.
+**Counts:** live **38** · partial 1 · parked 8 · catalog-only **12** · total 59.
 
 | # | Rule name | Identifier (typical) | Family | Status | Note |
 |--:|---|---|---|---|---|
@@ -14,8 +14,8 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 4 | backup-recovery-point-minimum-retention-check | BACKUP_RECOVERY_POINT_MINIMUM_RETENTION_CHECK | Backup | catalog-only | Same RP type as parked row 2 |
 | 5 | cloudtrail-all-read-s3-data-event-check | CLOUDTRAIL_ALL_READ_S3_DATA_EVENT_CHECK | S3/CT | live | 2026-08-29 |
 | 6 | cloudtrail-all-write-s3-data-event-check | CLOUDTRAIL_ALL_WRITE_S3_DATA_EVENT_CHECK | S3/CT | live | 2026-08-29 |
-| 7 | ebs-in-backup-plan | EBS_IN_BACKUP_PLAN | EBS | catalog-only | Coverage family; do not rerun this recorder |
-| 8 | ebs-last-backup-recovery-point-created | EBS_LAST_BACKUP_RECOVERY_POINT_CREATED | EBS | catalog-only | |
+| 7 | ebs-in-backup-plan | EBS_IN_BACKUP_PLAN | EBS | parked | Eval only stale volumes; never harness volume |
+| 8 | ebs-last-backup-recovery-point-created | EBS_LAST_BACKUP_RECOVERY_POINT_CREATED | EBS | parked | Empty EvaluationResults |
 | 9 | ebs-meets-restore-time-target | EBS_MEETS_RESTORE_TIME_TARGET | EBS | catalog-only | |
 | 10 | ebs-optimized-instance | EBS_OPTIMIZED_INSTANCE | EBS | live | 2026-08-29 210s; c3.xlarge EbsOptimized=false NC; t3.nano C |
 | 11 | ebs-resources-in-logically-air-gapped-vault | EBS_RESOURCES_IN_LOGICALLY_AIR_GAPPED_VAULT | EBS | catalog-only | |
@@ -30,11 +30,11 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 20 | efs-automatic-backups-enabled | EFS_AUTOMATIC_BACKUPS_ENABLED | EFS | live | |
 | 21 | efs-encrypted-check | EFS_ENCRYPTED_CHECK | EFS | live | |
 | 22 | efs-filesystem-ct-encrypted | EFS_FILESYSTEM_CT_ENCRYPTED | EFS | live | 2026-08-29 |
-| 23 | efs-in-backup-plan | EFS_IN_BACKUP_PLAN | EFS | catalog-only | Coverage family; do not rerun this recorder |
-| 24 | efs-mount-target-public-accessible | EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE | EFS | live | 2026-08-29 167s; public MT NC / private MT C; throwaway /28 cleaned |
-| 25 | efs-resources-protected-by-backup-plan | EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN | EFS | catalog-only | Coverage family; do not rerun this recorder |
+| 23 | efs-in-backup-plan | EFS_IN_BACKUP_PLAN | EFS | live | 2026-08-29 boto3 |
+| 24 | efs-mount-target-public-accessible | EFS_MOUNT_TARGET_PUBLIC_ACCESSIBLE | EFS | live | 2026-08-29 167s; public MT NC / private MT C |
+| 25 | efs-resources-protected-by-backup-plan | EFS_RESOURCES_PROTECTED_BY_BACKUP_PLAN | EFS | live | 2026-08-29 boto3 |
 | 26 | encrypted-volumes | ENCRYPTED_VOLUMES | EBS | live | |
-| 27 | fsx-lustre-copy-tags-to-backups | FSX_LUSTRE_COPY_TAGS_TO_BACKUPS | FSx | catalog-only | |
+| 27 | fsx-lustre-copy-tags-to-backups | FSX_LUSTRE_COPY_TAGS_TO_BACKUPS | FSx | catalog-only | Same discovery risk as OpenZFS |
 | 28 | fsx-ontap-deployment-type-check | FSX_ONTAP_DEPLOYMENT_TYPE_CHECK | FSx | catalog-only | |
 | 29 | fsx-openzfs-copy-tags-enabled | FSX_OPENZFS_COPY_TAGS_ENABLED | FSx | parked | Config never discovered FS |
 | 30 | fsx-resources-protected-by-backup-plan | FSX_RESOURCES_PROTECTED_BY_BACKUP_PLAN | FSx | catalog-only | |
@@ -60,10 +60,10 @@ Statuses: **live** = NC+C cycle; **partial** = NC only; **parked** = attempted, 
 | 50 | s3-bucket-versioning-enabled | S3_BUCKET_VERSIONING_ENABLED | S3 | live | |
 | 51 | s3-default-encryption-kms | S3_DEFAULT_ENCRYPTION_KMS | S3 | live | |
 | 52 | s3-event-notifications-enabled | S3_EVENT_NOTIFICATIONS_ENABLED | S3 | live | |
-| 53 | s3express-dir-bucket-lifecycle-rules-check | S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK | S3 | catalog-only | |
-| 54 | s3-last-backup-recovery-point-created | S3_LAST_BACKUP_RECOVERY_POINT_CREATED | S3 | catalog-only | |
+| 53 | s3express-dir-bucket-lifecycle-rules-check | S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK | S3 | catalog-only | Next attempt 2026-08-30 |
+| 54 | s3-last-backup-recovery-point-created | S3_LAST_BACKUP_RECOVERY_POINT_CREATED | S3 | live | 2026-08-29; versioning left Suspended |
 | 55 | s3-lifecycle-policy-check | S3_LIFECYCLE_POLICY_CHECK | S3 | live | |
 | 56 | s3-meets-restore-time-target | S3_MEETS_RESTORE_TIME_TARGET | S3 | catalog-only | |
 | 57 | s3-resources-in-logically-air-gapped-vault | S3_RESOURCES_IN_LOGICALLY_AIR_GAPPED_VAULT | S3 | catalog-only | |
-| 58 | s3-resources-protected-by-backup-plan | S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN | S3 | catalog-only | Coverage family; do not rerun this recorder |
+| 58 | s3-resources-protected-by-backup-plan | S3_RESOURCES_PROTECTED_BY_BACKUP_PLAN | S3 | live | 2026-08-29 boto3 on live bucket |
 | 59 | s3-version-lifecycle-policy-check | S3_VERSION_LIFECYCLE_POLICY_CHECK | S3 | live | |
