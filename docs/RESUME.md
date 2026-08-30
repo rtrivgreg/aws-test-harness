@@ -1,31 +1,24 @@
 # Resume note — aws-test-harness
 
-Last updated: 2026-08-30 05:25 EDT
+Last updated: 2026-08-30 05:42 EDT
 
 ## Score
 
-Storage CP live **38 / 59**. Partial 1. Parked 9. Catalog-only 11.
+Storage CP live **38 / 59**. Partial 1. Parked 10. Catalog-only 10.
 Do not apply Terraform drift.
 
 ## This morning
 
-Self-hosted runner Idle on `ip-10-0-1-190` (`/mnt/scratchpad/actions-runner`).
-Dispatch workflow `.github/workflows/harness-ec2.yml` works (runs 1–2).
+Self-hosted runner works. Instance profile `EC2-SSM-Role` on `i-015cc0059621c1a1c`.
 
-Parked `S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK`:
-botocore CreateSession always hits
-`https://<bucket>.s3express-control.us-east-1.amazonaws.com/?session`
-(EndpointConnectionError on use1-az4/5/6). Path-style config does not stop it.
-This VPC has no working s3express-control path. Do not rerun until an
-`s3express` interface endpoint exists. Do not leave directory buckets around;
-none were created.
+Parked `S3EXPRESS_DIR_BUCKET_LIFECYCLE_RULES_CHECK` — s3express-control unreachable.
+
+Parked `EC2_SPOT_FLEET_REQUEST_CT_ENCRYPTION_AT_REST` — no Spot Fleet IAM role
+and `EC2-SSM-Role` cannot `iam:CreateRole` / no matching GetRole.
+Unpark if you create `aws-ec2-spot-fleet-tagging-role` with
+`AmazonEC2SpotFleetTaggingRole` (or set `HARNESS_SPOT_FLEET_ROLE_ARN`) and
+`iam:PassRole` for that role on the instance profile.
 
 ## Locked 2026-08-29 evening
 
 - `S3_LAST_BACKUP_RECOVERY_POINT_CREATED` on `cfg-test-ef57dcf4-ca589695`
-
-## Parked — do not rerun on this recorder / this VPC
-
-EBS_IN_BACKUP_PLAN; EBS_LAST_BACKUP_RECOVERY_POINT_CREATED;
-RP encrypted; EBS protected-by-plan; snapshot BPA; snapshot C path;
-SSE-S3; FSx OpenZFS; RCP; S3 Express directory-bucket lifecycle.
