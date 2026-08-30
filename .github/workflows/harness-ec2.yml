@@ -1,0 +1,42 @@
+name: harness-ec2
+
+on:
+  workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: pytest args (repo-root relative)
+        required: true
+        default: tests/test_s3express_lifecycle_rules.py -q -s
+
+concurrency:
+  group: harness-ec2-live
+  cancel-in-progress: false
+
+jobs:
+  pytest:
+    runs-on: [self-hosted, linux, harness-ec2]
+    env:
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      CATALOG_TABLE_NAME: y62db-config-rule-catalog
+      CATALOG_GROUP: default
+      TEST_RUN_ID: ef57dcf4
+      S3_TEST_BUCKET: cfg-test-ef57dcf4-ca589695
+      CLOUDTRAIL_KMS_KEY_ARN: arn:aws:kms:us-east-1:418295699841:key/45b99a45-cb78-47e5-9f70-0296ef21bee7
+      TMPDIR: /mnt/scratchpad/pytest_tmp
+      TF_PLUGIN_CACHE_DIR: /mnt/scratchpad/terraform/plugin_cache
+      TF_DATA_DIR: /mnt/scratchpad/terraform/.terraform
+      HARNESS_ALLOW_TF_APPLY: "0"
+    steps:
+      - name: pull SHA and run pytest on existing clone
+        run: |
+          set -euo pipefail
+          df -h / /mnt/scratchpad
+          cd /home/ubuntu/repost/aws-test-harness
+          git stash --include-untracked || true
+          git fetch origin
+          git checkout --force "${GITHUB_SHA}"
+          source .venv/bin/activate
+          python -V
+          pytest ${{ inputs.pytest_args }} \
+            -o cache_dir=/mnt/scratchpad/pytest_tmp/.pytest_cache
